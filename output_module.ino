@@ -1,20 +1,19 @@
-//#include <HVL.h>
-//#include "DebugUtils.h"
-
 #include <avr/wdt.h>
+#include <EEPROM.h>
+#include <TimerOne.h>
+#include <Adafruit_ADS1015.h>
+#include <CircularBuffer.h>
+//#include <rotary.h>
+
 //#include <SPI.h>
 //#include <Button.h>
 //#include <SDHT.h>
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
-//#include <rotary.h>
-#include <EEPROM.h>
-#include <TimerOne.h>
 //#include <wire.h>
-#include <Adafruit_ADS1015.h>
-#include <CircularBuffer.h>
 
-#include "offgrid_constants.h"
+#include "shared_constants.h"
+#include "internal_constants.h"
 
 // See avr/iom328p.h for register & bit definitions
 
@@ -74,15 +73,6 @@
 
 */
 
-#define INTERRUPT_PERIOD_MICROSECONDS 500
-
-#define OUTPUT0 3
-#define OUTPUT1 5
-#define OUTPUT2 6
-#define OUTPUT3 9
-#define OUTPUT4 4 /* NO HARDWARE PWM */
-#define OUTPUT5 7 /* NO HARDWARE PWM */
-
 // Look up table for converting ID to actual output
 const byte outputs[6] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5};
 byte output_values[6] = {0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
@@ -91,22 +81,6 @@ enum ReceiveState {
         GET_STX = 1,
         GET_DATA = 2,
 };
-
-// ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
-// ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
-// ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
-// ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
-// ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-// ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
-
-#define ADS1115_0_GAIN GAIN_SIXTEEN
-#define ADS1115_0_MULTIPLER 0.0000078125f
-
-#define ADS1115_1_GAIN GAIN_SIXTEEN
-#define ADS1115_1_MULTIPLER 0.0000078125f
-
-#define ADS1115_2_GAIN GAIN_ONE
-#define ADS1115_2_MULTIPLER 0.000125f
 
 // Variables related to status code LED and flashing
 volatile bool flash_led = false;
@@ -125,18 +99,11 @@ volatile uint16_t timer_counter_2 = (10) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 
 
 volatile bool wdt_isr_executed = false;
 
+// ADC Modules
 Adafruit_ADS1115 ads0(0x48);
 Adafruit_ADS1115 ads1(0x49);
 Adafruit_ADS1115 ads2(0x4A);
-
-#define ADC_0_01 0
-#define ADC_0_23 1
-#define ADC_1_01 2
-#define ADC_1_23 3
-#define ADC_2_0 4
-#define ADC_2_1 5
-#define ADC_2_2 6
-#define ADC_2_3 7
+//Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
 struct BMConst battery_monitor_const[2];
 
@@ -147,27 +114,6 @@ struct {
   float amphours_remaining; // Tracks coulombs
   float percent_soc;
 } battery_monitor_var[2];
-
-#define MEMMAP_BANK0_VOLTS    0x20
-#define MEMMAP_BANK0_AMPS     0x21
-#define MEMMAP_BANK0_AH_LEFT  0x22
-#define MEMMAP_BANK0_SOC      0x23
-
-// EEPROM - LIMITED WRITES!
-#define MEMMAP_BANK0_AMPS_MULTIPLIER 0x24
-#define MEMMAP_BANK0_VOLTS_MULTIPLIER 0x25
-#define MEMMAP_BANK0_AH_CAPACITY 0x26
-#define MEMMAP_BANK0_VOLTS_CHARGED 0x27
-#define MEMMAP_BANK0_CHRG_DET_TIME 0x28
-#define MEMMAP_BANK0_TAIL_CURRENT 0x29
-#define MEMMAP_BANK0_PEUKERT_FACTOR 0x2A
-#define MEMMAP_BANK0_CHRG_EFFICIENCY 0x2B
-
-// No second bank yet
-//#define MEMMAP_BANK1_VOLTS    0x30
-//#define MEMMAP_BANK1_AMPS     0x31
-//#define MEMMAP_BANK1_AH_LEFT  0x31
-//#define MEMMAP_BANK1_SOC      0x33
 
 int32_t adc_sum[8] = {0};
 int8_t adc_count[8] = {0};
@@ -329,7 +275,7 @@ unsigned int token = 0;
 void ReadADCs(void) {
   const int max_count = 12; // sampled at 80ms, (10ms, 1 in 8 times) this gives an averaging window of ~1s
 
-  if (adc_count[token] == max_count) {
+  if (adc_count[token] >= max_count) {
     adc_sum[token] -= ( adc_sum[token] / adc_count[token] );
   }
   else {
@@ -348,7 +294,7 @@ void ReadADCs(void) {
     case ADC_2_3: adc_sum[token] += ads2.readADC_SingleEnded(3); break;
   }
 
-  if (token > 7) {
+  if (token >= 7) {
     token = 0;
   }
   else {
@@ -400,7 +346,7 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
   switch (address) {
     // Switches
-    case 0x00000010: // Sets the period between data broadcasts.  0xFFFFFFFF disables until another value is set.  Limited to minimum 100ms period.
+    case MEMMAP_SETTING_BROADCAST_PERIOD_MS: // Sets the period between data broadcasts.  0xFFFFFFFF disables until another value is set.  Limited to minimum 100ms period.
       inhibit_broadcast = (data == 0xFFFFFFFF);
       broadcast_period_ms = max(100, data);
       broadcast_timer_counter = broadcast_period_ms * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
@@ -430,50 +376,63 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       return true;
       
     case MEMMAP_BANK0_AH_CAPACITY:
-      battery_monitor_const[0].amphours_capacity = (int16_t)data / 10.0;
+      data = max(0.1, data); // must be greater than zero
+      battery_monitor_const[0].amphours_capacity = (int16_t)data *0.1;
       EEPROM.put(eeaddr_bank0_amphours_capacity, battery_monitor_const[0].amphours_capacity);
       return true;
       
-//    case MEMMAP_BANK0_VOLTS_CHARGED:
-//    case MEMMAP_BANK0_CHRG_DET_TIME:
-//    case MEMMAP_BANK0_TAIL_CURRENT:
-//    case MEMMAP_BANK0_PEUKERT_FACTOR:
-//    case MEMMAP_BANK0_CHRG_EFFICIENCY:
+    case MEMMAP_BANK0_VOLTS_CHARGED:
+      battery_monitor_const[0].volts_charged = (int16_t)data * 0.001;
+      EEPROM.put(eeaddr_bank0_volts_charged, battery_monitor_const[0].volts_charged);
+      return true;
+      
+    case MEMMAP_BANK0_CHRG_DET_TIME:
+      data = max(0.1, data); // must be greater than zero
+      battery_monitor_const[0].minutes_charged_detection_time = (int16_t)data * 0.1;
+      EEPROM.put(eeaddr_bank0_minutes_charged_detection_time, battery_monitor_const[0].minutes_charged_detection_time);
+      return true;
+      
+    case MEMMAP_BANK0_TAIL_CURRENT:
+      data = max(0.01, data); // must be greater than zero
+      battery_monitor_const[0].tail_current_factor = (int8_t)data * 0.01;
+      EEPROM.put(eeaddr_bank0_tail_current_factor, battery_monitor_const[0].tail_current_factor);
+      return true;
+      
+    case MEMMAP_BANK0_PEUKERT_FACTOR:
+      data = max(0.01, data); // must be greater than zero
+      battery_monitor_const[0].peukert_factor = (int8_t)data * 0.01;
+      EEPROM.put(eeaddr_bank0_peukert_factor, battery_monitor_const[0].peukert_factor);
+      return true;
+      
+    case MEMMAP_BANK0_CHRG_EFFICIENCY:
+      data = max(0.01, data); // must be greater than zero
+      battery_monitor_const[0].charge_efficiency_factor = (int8_t)data * 0.01;
+      EEPROM.put(eeaddr_bank0_charge_efficiency_factor, battery_monitor_const[0].charge_efficiency_factor);
+      return true;      
 
     // TODO: Add another inhibit for replies to SET commands?  For data that doesn't need acknowledged and speed is paramount.
 
     // Valid range of address-mapped PWM is 0-100%
-    case 0x000000A0:
-    case 0x000000A1:
-    case 0x000000A2:
-    case 0x000000A3:
-    case 0x000000A4:
-    case 0x000000A5:
-    case 0x000000A6:
-    case 0x000000A7:
+    case MEMMAP_PWM_OUTPUT0:
+    case MEMMAP_PWM_OUTPUT1:
+    case MEMMAP_PWM_OUTPUT2:
+    case MEMMAP_PWM_OUTPUT3:
+    case MEMMAP_PWM_OUTPUT4:
+    case MEMMAP_PWM_OUTPUT5:
+    case MEMMAP_PWM_OUTPUT6:
+    case MEMMAP_PWM_OUTPUT7:
       SetPWM(address & 0x00000007, data);
       return true;
 
-//    case 0x000000A8:
-//    case 0x000000A9:
-//    case 0x000000AA:
-//    case 0x000000AB:
-//    case 0x000000AC:
-//    case 0x000000AD:
-//    case 0x000000AE:
-//    case 0x000000AF:
-//      ToggleEnable(address & 0x00000007);
-//      return true;
-
     // ADC read only inputs
-    case 0x000000B0:
-    case 0x000000B1:
-    case 0x000000B2:
-    case 0x000000B3:
-    case 0x000000B4:
-    case 0x000000B5:
-    case 0x000000B6:
-    case 0x000000B7:
+    case MEMMAP_ADC_0_01:
+    case MEMMAP_ADC_0_23:
+    case MEMMAP_ADC_1_01:
+    case MEMMAP_ADC_1_23:
+    case MEMMAP_ADC_2_0:
+    case MEMMAP_ADC_2_1:
+    case MEMMAP_ADC_2_2:
+    case MEMMAP_ADC_2_3:
       return false;
   }
 
@@ -486,21 +445,21 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 uint32_t GetMemoryMap(uint16_t address) {
 
   switch (address) {
-    case 0x00000010:
+    case MEMMAP_SETTING_BROADCAST_PERIOD_MS:
       return broadcast_period_ms;
 
-    case MEMMAP_BANK0_VOLTS:      return battery_monitor_var[0].volts * 100; // DP shifted left 2, 655.35 V fits int16
-    case MEMMAP_BANK0_AMPS:       return battery_monitor_var[0].amps * 10; // DP shifted left 1, 6553.5 A fits int16
-    case MEMMAP_BANK0_AH_LEFT:    return battery_monitor_var[0].amphours_remaining * 10; // DP shifted left 1, 6553.5 Ah fits int16
-    case MEMMAP_BANK0_SOC:        return battery_monitor_var[0].percent_soc * 100; // DP shifted left 2, 655.35 % (invalid) fits int16
+    case MEMMAP_BANK0_VOLTS:            return battery_monitor_var[0].volts * 100;
+    case MEMMAP_BANK0_AMPS:             return battery_monitor_var[0].amps * 10;
+    case MEMMAP_BANK0_AH_LEFT:          return battery_monitor_var[0].amphours_remaining * 10;
+    case MEMMAP_BANK0_SOC:              return battery_monitor_var[0].percent_soc * 100;
     case MEMMAP_BANK0_AMPS_MULTIPLIER:  return battery_monitor_const[0].amps_multiplier * 1000000;
     case MEMMAP_BANK0_VOLTS_MULTIPLIER: return battery_monitor_const[0].volts_multiplier * 1000000;
     case MEMMAP_BANK0_AH_CAPACITY:      return battery_monitor_const[0].amphours_capacity * 10;
-//    case MEMMAP_BANK0_VOLTS_CHARGED: return false;
-//    case MEMMAP_BANK0_CHRG_DET_TIME: return false;
-//    case MEMMAP_BANK0_TAIL_CURRENT: return false;
-//    case MEMMAP_BANK0_PEUKERT_FACTOR: return false;
-//    case MEMMAP_BANK0_CHRG_EFFICIENCY: return false;
+    case MEMMAP_BANK0_VOLTS_CHARGED:    return battery_monitor_const[0].volts_charged * 1000;
+    case MEMMAP_BANK0_CHRG_DET_TIME:    return battery_monitor_const[0].minutes_charged_detection_time * 10;
+    case MEMMAP_BANK0_TAIL_CURRENT:     return battery_monitor_const[0].tail_current_factor * 100;
+    case MEMMAP_BANK0_PEUKERT_FACTOR:   return battery_monitor_const[0].peukert_factor * 100;
+    case MEMMAP_BANK0_CHRG_EFFICIENCY:  return battery_monitor_const[0].charge_efficiency_factor * 100;
 
 // No second bank to test with!
 //    case MEMMAP_BANK1_VOLTS: return (uint32_t)battery_monitor_var[1].volts; // float
@@ -508,36 +467,24 @@ uint32_t GetMemoryMap(uint16_t address) {
 //    case MEMMAP_BANK1_AMPHOURS: return (uint32_t)battery_monitor_var[1].amphours_consumed; // float;
 //    case MEMMAP_BANK1_SOC: return (uint32_t)battery_monitor_var[1].percent_soc; // float;
 
-    case 0x000000A0:
-    case 0x000000A1:
-    case 0x000000A2:
-    case 0x000000A3:
-    case 0x000000A4:
-    case 0x000000A5:
-    case 0x000000A6:
-    case 0x000000A7:
+    case MEMMAP_PWM_OUTPUT0:
+    case MEMMAP_PWM_OUTPUT1:
+    case MEMMAP_PWM_OUTPUT2:
+    case MEMMAP_PWM_OUTPUT3:
+    case MEMMAP_PWM_OUTPUT4:
+    case MEMMAP_PWM_OUTPUT5:
+    case MEMMAP_PWM_OUTPUT6:
+    case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
 
-//    case 0x000000A8:
-//    case 0x000000A9:
-//    case 0x000000AA:
-//    case 0x000000AB:
-//    case 0x000000AC:
-//    case 0x000000AD:
-//    case 0x000000AE:
-//    case 0x000000AF:
-//      return 0;
-//    // TODO
-//    //return EnableState[address & 0x0007];
-
-    case 0x000000B0:
-    case 0x000000B1:
-    case 0x000000B2:
-    case 0x000000B3:
-    case 0x000000B4:
-    case 0x000000B5:
-    case 0x000000B6:
-    case 0x000000B7:
+    case MEMMAP_ADC_0_01:
+    case MEMMAP_ADC_0_23:
+    case MEMMAP_ADC_1_01:
+    case MEMMAP_ADC_1_23:
+    case MEMMAP_ADC_2_0:
+    case MEMMAP_ADC_2_1:
+    case MEMMAP_ADC_2_2:
+    case MEMMAP_ADC_2_3:
       return (uint16_t)(adc_sum[address & 0x0007] / adc_count[address & 0x0007]);
   }
 
