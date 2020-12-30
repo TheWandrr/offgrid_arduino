@@ -105,6 +105,13 @@ Adafruit_ADS1115 ads1(0x49);
 Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
+enum ChargeState {
+  CS_NONE,
+  CS_CHARGING,
+  CS_DISCHARGING,
+  CS_CHARGED
+} ;
+
 struct BMConst battery_monitor_const[2];
 
 // These are mapped into the address space for read/write where appropriate
@@ -113,6 +120,7 @@ struct {
   float amps; // Battery current at last sample
   float amphours_remaining; // Tracks coulombs
   float percent_soc;
+  enum ChargeState charge_state;
 } battery_monitor_var[2];
 
 int32_t adc_sum[8] = {0};
@@ -216,22 +224,24 @@ void initBatteryMonitor(void) {
 
 //  for (unsigned int i = 0; i < ( sizeof(battery_monitor_const)/sizeof(battery_monitor_const[0]) ); i++) {
 //    Serial.print("Bank ");Serial.print(i); Serial.println(":");
-//    Serial.print("amps_multiplier: "); Serial.println(battery_monitor_const[i].amps_multiplier);
-//    Serial.print("volts_multiplier: "); Serial.println(battery_monitor_const[i].volts_multiplier);
+//    Serial.print("amps_multiplier: "); Serial.println(battery_monitor_const[i].amps_multiplier, 6);
+//    Serial.print("volts_multiplier: "); Serial.println(battery_monitor_const[i].volts_multiplier, 6);
 //    Serial.print("amphours_capacity: "); Serial.println(battery_monitor_const[i].amphours_capacity);
-//    Serial.print("volts_charged: "); Serial.println(battery_monitor_const[i].volts_charged);
+//    Serial.print("volts_charged: "); Serial.println(battery_monitor_const[i].volts_charged, 3);
 //    Serial.print("minutes_charged_detection_time: "); Serial.println(battery_monitor_const[i].minutes_charged_detection_time);
-//    Serial.print("tail_current_factor: "); Serial.println(battery_monitor_const[i].tail_current_factor);
-//    Serial.print("peukert_factor: "); Serial.println(battery_monitor_const[i].peukert_factor);
-//    Serial.print("charge_efficiency_factor: "); Serial.println(battery_monitor_const[i].charge_efficiency_factor);
+//    Serial.print("current_threshold: "); Serial.println(battery_monitor_const[i].current_threshold, 6);
+//    Serial.print("tail_current_factor: "); Serial.println(battery_monitor_const[i].tail_current_factor, 2);
+//    Serial.print("peukert_factor: "); Serial.println(battery_monitor_const[i].peukert_factor, 3);
+//    Serial.print("charge_efficiency_factor: "); Serial.println(battery_monitor_const[i].charge_efficiency_factor, 2);
 //    Serial.println();
 //  }
 
-  // At startup/reset we can assume nothing about these until a full charge synchronization.
-  battery_monitor_var[0].amphours_remaining = battery_monitor_const[0].amphours_capacity;
-  battery_monitor_var[0].percent_soc = 100;
-//  battery_monitor_var[1].amphours_remaining = battery_monitor_const[1].amphours_capacity;
-//  battery_monitor_var[1].percent_soc = 100;
+  for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+    // At startup/reset we can assume nothing about these until a full charge synchronization.
+    battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
+    battery_monitor_var[i].percent_soc = 100;
+    battery_monitor_var[i].charge_state = CS_NONE;
+  }
 }
 
 void processBatteryMonitor(void) {  
@@ -244,7 +254,37 @@ void processBatteryMonitor(void) {
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
     battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
+
+//#error "Unfinished code - charge state machine"
+//
+//    switch(battery_monitor_var_charge_state[i]) {
+//      CS_NONE: 
+//        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
+//        else if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
+//        break;
+//
+//      CS_CHARGED:        
+//        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
+//        break;
+//        
+//      CS_CHARGING:
+//        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
+//        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
+//        // If voltage rises above 'volts_charged' and current falls below 'tail_current_factor', start a timer and set a "sync_pending" flag
+//        // If voltage falls below 'volts_charged' or current rises above 'tail_current_factor' (less some hysterisis amounts), stop the timer and clear the "sync_pending" flag
+//
+//        // If "sync_pending" is set and timer exceeds 'minutes_charged_detection_time', set all appropriate variables then switch to CHARGED state
+//        break;
+//        
+//      CS_DISCHARGING:
+//        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
+//        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
+//        break;
+//        
+//    }
+
   }
+
 }
 
 void broadcastPWMValues(void) {
@@ -366,47 +406,52 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       return true;;
 
     case MEMMAP_BANK0_AMPS_MULTIPLIER:
-      battery_monitor_const[0].amps_multiplier = (int32_t)data * 0.000001;
+      battery_monitor_const[0].amps_multiplier = (uint32_t)data * 0.000001;
       EEPROM.put(eeaddr_bank0_amps_multiplier, battery_monitor_const[0].amps_multiplier);
       return true;
       
     case MEMMAP_BANK0_VOLTS_MULTIPLIER:
-      battery_monitor_const[0].volts_multiplier = (int32_t)data * 0.000001;
+      battery_monitor_const[0].volts_multiplier = (uint32_t)data * 0.000001;
       EEPROM.put(eeaddr_bank0_volts_multiplier, battery_monitor_const[0].volts_multiplier);
       return true;
       
     case MEMMAP_BANK0_AH_CAPACITY:
       data = max(0.1, data); // must be greater than zero
-      battery_monitor_const[0].amphours_capacity = (int16_t)data *0.1;
+      battery_monitor_const[0].amphours_capacity = (uint16_t)data *0.1;
       EEPROM.put(eeaddr_bank0_amphours_capacity, battery_monitor_const[0].amphours_capacity);
       return true;
       
     case MEMMAP_BANK0_VOLTS_CHARGED:
-      battery_monitor_const[0].volts_charged = (int16_t)data * 0.001;
+      battery_monitor_const[0].volts_charged = (uint16_t)data * 0.001;
       EEPROM.put(eeaddr_bank0_volts_charged, battery_monitor_const[0].volts_charged);
       return true;
       
     case MEMMAP_BANK0_CHRG_DET_TIME:
       data = max(0.1, data); // must be greater than zero
-      battery_monitor_const[0].minutes_charged_detection_time = (int16_t)data * 0.1;
+      battery_monitor_const[0].minutes_charged_detection_time = (uint16_t)data * 0.1;
       EEPROM.put(eeaddr_bank0_minutes_charged_detection_time, battery_monitor_const[0].minutes_charged_detection_time);
       return true;
       
+    case MEMMAP_BANK0_CURRENT_THRESHOLD:
+      battery_monitor_const[0].current_threshold = (uint32_t)data * 0.000001;
+      EEPROM.put(eeaddr_bank0_current_threshold, battery_monitor_const[0].current_threshold);
+      return true;      
+
     case MEMMAP_BANK0_TAIL_CURRENT:
       data = max(0.01, data); // must be greater than zero
-      battery_monitor_const[0].tail_current_factor = (int8_t)data * 0.01;
+      battery_monitor_const[0].tail_current_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_tail_current_factor, battery_monitor_const[0].tail_current_factor);
       return true;
       
     case MEMMAP_BANK0_PEUKERT_FACTOR:
       data = max(0.01, data); // must be greater than zero
-      battery_monitor_const[0].peukert_factor = (int8_t)data * 0.01;
+      battery_monitor_const[0].peukert_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_peukert_factor, battery_monitor_const[0].peukert_factor);
       return true;
       
     case MEMMAP_BANK0_CHRG_EFFICIENCY:
       data = max(0.01, data); // must be greater than zero
-      battery_monitor_const[0].charge_efficiency_factor = (int8_t)data * 0.01;
+      battery_monitor_const[0].charge_efficiency_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_charge_efficiency_factor, battery_monitor_const[0].charge_efficiency_factor);
       return true;      
 
@@ -448,18 +493,19 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_SETTING_BROADCAST_PERIOD_MS:
       return broadcast_period_ms;
 
-    case MEMMAP_BANK0_VOLTS:            return battery_monitor_var[0].volts * 100;
-    case MEMMAP_BANK0_AMPS:             return battery_monitor_var[0].amps * 10;
-    case MEMMAP_BANK0_AH_LEFT:          return battery_monitor_var[0].amphours_remaining * 10;
-    case MEMMAP_BANK0_SOC:              return battery_monitor_var[0].percent_soc * 100;
-    case MEMMAP_BANK0_AMPS_MULTIPLIER:  return battery_monitor_const[0].amps_multiplier * 1000000;
-    case MEMMAP_BANK0_VOLTS_MULTIPLIER: return battery_monitor_const[0].volts_multiplier * 1000000;
-    case MEMMAP_BANK0_AH_CAPACITY:      return battery_monitor_const[0].amphours_capacity * 10;
-    case MEMMAP_BANK0_VOLTS_CHARGED:    return battery_monitor_const[0].volts_charged * 1000;
-    case MEMMAP_BANK0_CHRG_DET_TIME:    return battery_monitor_const[0].minutes_charged_detection_time * 10;
-    case MEMMAP_BANK0_TAIL_CURRENT:     return battery_monitor_const[0].tail_current_factor * 100;
-    case MEMMAP_BANK0_PEUKERT_FACTOR:   return battery_monitor_const[0].peukert_factor * 100;
-    case MEMMAP_BANK0_CHRG_EFFICIENCY:  return battery_monitor_const[0].charge_efficiency_factor * 100;
+    case MEMMAP_BANK0_VOLTS:              return battery_monitor_var[0].volts * 100;
+    case MEMMAP_BANK0_AMPS:               return battery_monitor_var[0].amps * 10;
+    case MEMMAP_BANK0_AH_LEFT:            return battery_monitor_var[0].amphours_remaining * 10;
+    case MEMMAP_BANK0_SOC:                return battery_monitor_var[0].percent_soc * 100;
+    case MEMMAP_BANK0_AMPS_MULTIPLIER:    return battery_monitor_const[0].amps_multiplier * 1000000;
+    case MEMMAP_BANK0_VOLTS_MULTIPLIER:   return battery_monitor_const[0].volts_multiplier * 1000000;
+    case MEMMAP_BANK0_AH_CAPACITY:        return battery_monitor_const[0].amphours_capacity * 10;
+    case MEMMAP_BANK0_VOLTS_CHARGED:      return battery_monitor_const[0].volts_charged * 1000;
+    case MEMMAP_BANK0_CHRG_DET_TIME:      return battery_monitor_const[0].minutes_charged_detection_time * 10;
+    case MEMMAP_BANK0_TAIL_CURRENT:       return battery_monitor_const[0].tail_current_factor * 100;
+    case MEMMAP_BANK0_CURRENT_THRESHOLD:  return battery_monitor_const[0].tail_current_factor * 1000000;
+    case MEMMAP_BANK0_PEUKERT_FACTOR:     return battery_monitor_const[0].peukert_factor * 100;
+    case MEMMAP_BANK0_CHRG_EFFICIENCY:    return battery_monitor_const[0].charge_efficiency_factor * 100;
 
 // No second bank to test with!
 //    case MEMMAP_BANK1_VOLTS: return (uint32_t)battery_monitor_var[1].volts; // float
@@ -536,7 +582,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   //Serial.write((uint8_t)count); // Count is size of payload not including size, address and checksum
 
   // Output 16-bit address/id
-  Serial.print( (unsigned uint16_t)(address), HEX );
+  Serial.print( (unsigned uint16_t)(address), HEX ); // Won't output any leading zeros, but this should be ok here
 
   if(count > 0) {
     Serial.print(':');
@@ -550,7 +596,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
       fmt++;
     }
 
-    //Serial.print("'"); Serial.print(*fmt); Serial.print("'");
+    //DEBUG//Serial.print("'"); Serial.print(*fmt); Serial.print("'");
     
       switch(*fmt) {
 
@@ -598,15 +644,15 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 //          buff[j] = '\0';
 
           // DEBUGGING
-          Serial.println();
-          Serial.print("BUFF:(");
-          Serial.print(buff);
-          Serial.println(")");
+          //Serial.println();
+          //Serial.print("BUFF:(");
+          //Serial.print(buff);
+          //Serial.println(")");
           
-        break;
+        //break;
       }
 
-    //Serial.print("<"); Serial.print(value, HEX); Serial.println(">");
+    //DEBUG//Serial.print("<"); Serial.print((uint32_t)value, HEX); Serial.println(">");
   
     switch(*fmt) {
 //      case 'd': 
@@ -617,20 +663,24 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 //        // FALL THROUGH
 //      case 'f': 
       case 'l': 
-      case 'L': 
-        Serial.print( (unsigned uint8_t)(value >> 24), HEX );
+      case 'L':
+        Serial.print( (unsigned uint8_t)(value >> 28 ) & 0x0F, HEX ); // Print by nybble because HEX doesn't output leading '0'
+        Serial.print( (unsigned uint8_t)(value >> 24 ) & 0x0F, HEX );
         // FALL THROUGH
       case 't': 
       case 'T': 
-        Serial.print( (unsigned uint8_t)(value >> 16), HEX );
+        Serial.print( (unsigned uint8_t)(value >> 20 ) & 0x0F, HEX );
+        Serial.print( (unsigned uint8_t)(value >> 16 ) & 0x0F, HEX );
         // FALL THROUGH
       case 'i': 
       case 'I': 
-        Serial.print( (unsigned uint8_t)(value >>  8), HEX );
+        Serial.print( (unsigned uint8_t)(value >> 12 ) & 0x0F, HEX );
+        Serial.print( (unsigned uint8_t)(value >> 8  ) & 0x0F, HEX );
         // FALL THROUGH
       case 'b': 
       case 'B': 
-        Serial.print( (unsigned uint8_t)(value      ), HEX );
+        Serial.print( (unsigned uint8_t)(value >> 4  ) & 0x0F, HEX );
+        Serial.print( (unsigned uint8_t)(value >> 0  ) & 0x0F, HEX );
       break;      
 
 // String will need to have a marker character prepended to differentiate from ASCII-HEX, TBD
@@ -666,6 +716,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 
 unsigned int asciiHexToInt(char ch) {
   unsigned int num = 0;
+
   if( (ch >= '0') && (ch <= '9') ) {
     num = ch - '0';
   }
@@ -683,6 +734,26 @@ unsigned int asciiHexToInt(char ch) {
   
   return num;
 }
+
+//char intToAsciiHex(uint8_t num) {
+//  char c = '';
+//
+//  if( (num >= 0) && (num <= 9) ) {
+//    c = num + '0';
+//  }
+//  else {
+//    switch(ch) {
+//      case 10: c = 'A'; break;
+//      case 11: c = 'B'; break;
+//      case 12: c = 'C'; break;
+//      case 13: c = 'D'; break;
+//      case 14: c = 'E'; break;
+//      case 15: c = 'F'; break;
+//    }
+//  }
+//
+//  return c;
+//}
 
 // TODO: Not working
 //void consumeWhitespace(char **p) {
@@ -711,6 +782,8 @@ void parse_message(char *msg_buf) {
   //   ... followed by optional colon
   //   ... followed by a comma-separated list of ASCII-HEX or STRING values of variable length
   //   ... string values have an additional marker character pre-pended TBD
+
+  //DEBUG//Serial.print("\""); Serial.print(msg_buf); Serial.println("\""); 
 
   //consumeWhitespace(&p); // TODO: Not working
 
@@ -762,7 +835,10 @@ void parse_message(char *msg_buf) {
           while ( isxdigit(*p) ) {
             value_buffer <<= 4;
             value_buffer += asciiHexToInt(*p);
-            
+
+//            Serial.print("*p = '"); Serial.print(*p); Serial.println("'");
+//            Serial.print("value_buffer = "); Serial.println(value_buffer, HEX); //DEBUG//
+
             count++;
             p++;
           }
@@ -889,6 +965,7 @@ void parse_message(char *msg_buf) {
 
       case MSG_SET_8_32:
         if (arg_count == 2) {
+//          Serial.print("arg[1] = "); Serial.println(arg[1], HEX); //DEBUG//
           if (SetMemoryMap((uint8_t)arg[0], (uint32_t)arg[1]) ) {
             serialize(MSG_RETURN_8_32, "bl", (uint8_t)arg[0], (uint32_t)GetMemoryMap(arg[0]));
           }

@@ -54,9 +54,10 @@
 #define MEMMAP_BANK0_AH_CAPACITY                0x0026 /* 2 bytes, x10 */
 #define MEMMAP_BANK0_VOLTS_CHARGED              0x0027 /* 2 bytes, x1000 */
 #define MEMMAP_BANK0_CHRG_DET_TIME              0x0028 /* 2 bytes, x10 */
-#define MEMMAP_BANK0_TAIL_CURRENT               0x0029 /* 1 bytes, x100 */
-#define MEMMAP_BANK0_PEUKERT_FACTOR             0x002A /* 1 bytes, x100 */
-#define MEMMAP_BANK0_CHRG_EFFICIENCY            0x002B /* 1 bytes, x100 */
+#define MEMMAP_BANK0_CURRENT_THRESHOLD          0x0029 /* 4 bytes, x1000000 */
+#define MEMMAP_BANK0_TAIL_CURRENT               0x002A /* 1 bytes, x100 */
+#define MEMMAP_BANK0_PEUKERT_FACTOR             0x002B /* 1 bytes, x100 */
+#define MEMMAP_BANK0_CHRG_EFFICIENCY            0x002C /* 1 bytes, x100 */
 
 // BANK1 battery monitor 0x0030 - 0x003F
 // BANK2 battery monitor 0x0040 - 0x004F

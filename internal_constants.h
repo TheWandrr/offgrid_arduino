@@ -40,22 +40,26 @@
 
 struct BMConst {
   double amps_multiplier; // Used to set mv/A, including any calibration
-  float volts_multiplier; // for calibration
+  double volts_multiplier; // for calibration
   uint16_t amphours_capacity; // Total battery capacity
   float volts_charged; // Voltage at which the battery is considered "charged"
   int minutes_charged_detection_time; // Amount of time the "charged" conditions need to be met before considered "charged"
+  float current_threshold; // Amount of (abs) current that is considered "noise" and ignored.
   float tail_current_factor; // Current at which the battery is considered "charged"
   float peukert_factor;
   float charge_efficiency_factor;
 };
 
-// This must be manually kept in sync with the above structure.  Bank 0 constants will always start at 0 with subsequent banks following in the same pattern.
-const uint8_t eeaddr_bank0_amps_multiplier = 0;
+// TODO: This needs to be manually kept in sync with the above structure.  Find a better way that automatically adjusts?
+const uint8_t eeaddr_bank0_base = 0;
+
+const uint8_t eeaddr_bank0_amps_multiplier = eeaddr_bank0_base;
 const uint8_t eeaddr_bank0_volts_multiplier = eeaddr_bank0_amps_multiplier + sizeof(double);
-const uint8_t eeaddr_bank0_amphours_capacity = eeaddr_bank0_volts_multiplier + sizeof(float);
+const uint8_t eeaddr_bank0_amphours_capacity = eeaddr_bank0_volts_multiplier + sizeof(double);
 const uint8_t eeaddr_bank0_volts_charged = eeaddr_bank0_amphours_capacity + sizeof(uint16_t);
 const uint8_t eeaddr_bank0_minutes_charged_detection_time = eeaddr_bank0_volts_charged + sizeof(float);
-const uint8_t eeaddr_bank0_tail_current_factor = eeaddr_bank0_minutes_charged_detection_time + sizeof(int);
+const uint8_t eeaddr_bank0_current_threshold = eeaddr_bank0_minutes_charged_detection_time + sizeof(int);
+const uint8_t eeaddr_bank0_tail_current_factor = eeaddr_bank0_current_threshold + sizeof(float);
 const uint8_t eeaddr_bank0_peukert_factor = eeaddr_bank0_tail_current_factor + sizeof(float);
 const uint8_t eeaddr_bank0_charge_efficiency_factor = eeaddr_bank0_peukert_factor + sizeof(float);
 
