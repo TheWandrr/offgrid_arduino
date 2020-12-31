@@ -23,6 +23,13 @@
 #define OUTPUT4 4 /* NO HARDWARE PWM */
 #define OUTPUT5 7 /* NO HARDWARE PWM */
 
+#define ENCODER1_LED_PIN 8
+
+#define ENCODER1_STEP -10
+#define ENCODER1_CHA_PIN A0
+#define ENCODER1_CHB_PIN A1
+#define ENCODER1_BTN_PIN A2
+
 // Fatal error flash codes - make sure none of these are ambiguous when flashing as two hex nybbles
 // 0x0? is acceptable but not 0x?0
 // Maybe avoid 1's if possible

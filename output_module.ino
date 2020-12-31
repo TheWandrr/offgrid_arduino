@@ -3,10 +3,10 @@
 #include <TimerOne.h>
 #include <Adafruit_ADS1015.h>
 #include <CircularBuffer.h>
-//#include <rotary.h>
+#include <rotary.h>
 
 //#include <SPI.h>
-//#include <Button.h>
+#include <Button.h>
 //#include <SDHT.h>
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
@@ -98,6 +98,17 @@ volatile bool ten_millisecond_flag = 0;
 volatile uint16_t timer_counter_2 = (10) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
 
 volatile bool wdt_isr_executed = false;
+
+enum Encoder1Mode {
+  ENC1MODE_DIMMER,
+  ENC1MODE_NAVIGATE,
+} encoder1_mode;
+
+Rotary encoder1 = Rotary(ENCODER1_CHA_PIN, ENCODER1_CHB_PIN);
+Button encoder1_button = Button(ENCODER1_BTN_PIN, PULLUP);
+int encoder1_value = 0;
+int encoder1_value_prev = 0;
+bool encoder1_button_value = 0;
 
 // ADC Modules
 Adafruit_ADS1115 ads0(0x48);
@@ -192,6 +203,8 @@ void loop() {
 
   if (base_timer_flag) {
     base_timer_flag = false;
+
+    processEncoders();
   }
 
   if(broadcast_flag) {
@@ -283,6 +296,56 @@ void processBatteryMonitor(void) {
 //        
 //    }
 
+  }
+
+}
+
+void processEncoders() {
+  uint8_t result;
+
+  result = encoder1.process();
+
+  if(result != DIR_NONE) {
+
+    switch (encoder1_mode) {
+      case ENC1MODE_DIMMER:
+        if(result == DIR_CW) {
+          encoder1_value += ENCODER1_STEP;
+        }
+        else if(result == DIR_CCW) {
+          encoder1_value -= ENCODER1_STEP;
+        }
+    
+        encoder1_value = constrain(encoder1_value, 0, 100);
+    
+        // Only do something if the encoder value has actually changed
+        if(encoder1_value != encoder1_value_prev) {
+          SetMemoryMap(MEMMAP_PWM_OUTPUT0, encoder1_value);
+          serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));      
+        }
+    
+        encoder1_value_prev = encoder1_value;
+      break;
+
+      case ENC1MODE_NAVIGATE:
+        // TODO
+      break;
+    }
+  }
+
+  encoder1_button_value = encoder1_button.isPressed();
+
+  // TODO: Holding button down for a specific period of time changes encoder mode
+  // TODO: Needs debouncing
+  if(encoder1_button.stateChanged()) {
+    Serial.print("Button...");
+
+    if(encoder1_button_value) {
+      Serial.println("Down");
+    }
+    else {
+      Serial.println("Up");
+    }
   }
 
 }
