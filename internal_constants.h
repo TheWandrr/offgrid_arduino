@@ -16,19 +16,22 @@
 
 #define INTERRUPT_PERIOD_MICROSECONDS 500
 
-#define OUTPUT0 3
+#define ENCODER1_STEP -10
+#define ENCODER1_CHA_PIN A0
+#define ENCODER1_CHB_PIN A1
+#define ENCODER1_BTN_PIN A2
+
+#define ENCODER1_LED_PIN 8
+#define CEILING_LIGHT 3
+
+#define OUTPUT0 CEILING_LIGHT
 #define OUTPUT1 5
 #define OUTPUT2 6
 #define OUTPUT3 9
 #define OUTPUT4 4 /* NO HARDWARE PWM */
 #define OUTPUT5 7 /* NO HARDWARE PWM */
-
-#define ENCODER1_LED_PIN 8
-
-#define ENCODER1_STEP -10
-#define ENCODER1_CHA_PIN A0
-#define ENCODER1_CHB_PIN A1
-#define ENCODER1_BTN_PIN A2
+#define OUTPUT6 ENCODER1_LED_PIN /* LOGIC LEVEL LOW CURRENT */
+#define OUTPUT7 3 /* PLACEHOLDER - TO BE REPLACED */ /* LOGIC LEVEL LOW CURRENT */
 
 // Fatal error flash codes - make sure none of these are ambiguous when flashing as two hex nybbles
 // 0x0? is acceptable but not 0x?0

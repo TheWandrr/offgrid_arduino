@@ -74,8 +74,8 @@
 */
 
 // Look up table for converting ID to actual output
-const byte outputs[6] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5};
-byte output_values[6] = {0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
+const byte outputs[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7}; // TODO: [7] is a placeholder
+byte output_values[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
 
 enum ReceiveState {
         GET_STX = 1,
@@ -93,6 +93,9 @@ volatile bool base_timer_flag = false;
 
 volatile bool one_second_flag = 0;
 volatile uint16_t timer_counter_1 = (1000) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
+
+volatile bool quarter_second_flag = 0;
+volatile uint16_t timer_counter_3 = (250) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
 
 volatile bool ten_millisecond_flag = 0;
 volatile uint16_t timer_counter_2 = (10) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
@@ -158,6 +161,7 @@ void setup() {
   Timer1.attachInterrupt(handleTimerTick);
 
   for (unsigned int i = 0; i < sizeof(outputs); i++) {
+    pinMode(outputs[i], OUTPUT);
     SetPWM(i, 0);
   }
 
@@ -220,7 +224,13 @@ void loop() {
   if (ten_millisecond_flag) {
     ten_millisecond_flag = false;
 
+    processEncoderLEDState();
     ReadADCs(); // TODO: This takes longer than it needs to and should be set up for continuous conversion.
+  }
+
+  if (quarter_second_flag) {
+    quarter_second_flag = false;
+
   }
 
   if (one_second_flag) {
@@ -254,6 +264,16 @@ void initBatteryMonitor(void) {
     battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
     battery_monitor_var[i].percent_soc = 100;
     battery_monitor_var[i].charge_state = CS_NONE;
+  }
+}
+
+// TODO: This could be used to signal error codes as well
+void processEncoderLEDState(void) {
+  if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 0) {
+    digitalWrite(ENCODER1_LED_PIN, 0);
+  }
+  else {
+    digitalWrite(ENCODER1_LED_PIN, 1);
   }
 }
 
@@ -431,10 +451,9 @@ void SetPWM(uint8_t output, uint8_t value) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
       analogWrite(outputs[output], cie1931_percent_to_byte(output_values[output]));
     }
-    else if ( (output >= 4) && (output <= 5) ) {
+    else if ( (output >= 4) && (output <= 7) ) {
       digitalWrite(outputs[output], output_values[output]);
     }
-    
   }
 }
 
@@ -530,6 +549,10 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
     case MEMMAP_PWM_OUTPUT6:
     case MEMMAP_PWM_OUTPUT7:
       SetPWM(address & 0x00000007, data);
+
+      // Other variables linked to outputs - not sure if this is the best way to structure this...
+      if( outputs[address & 0x00000007] == CEILING_LIGHT) { encoder1_value = (uint8_t)data; }
+      
       return true;
 
     // ADC read only inputs
@@ -1097,6 +1120,12 @@ void processSerialReceive(void) {
 
 void handleTimerTick(void) {
   base_timer_flag = true;
+
+  timer_counter_3--;
+  if (timer_counter_3 == 0) {
+    quarter_second_flag = true;
+    timer_counter_3 = (250) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
+  }
 
   timer_counter_2--;
   if (timer_counter_2 == 0) {
