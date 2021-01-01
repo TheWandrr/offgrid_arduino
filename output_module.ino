@@ -74,8 +74,9 @@
 */
 
 // Look up table for converting ID to actual output
-const byte outputs[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7}; // TODO: [7] is a placeholder
-byte output_values[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
+const byte output[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7}; // TODO: [7] is a placeholder
+byte output_value[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
+//bool output_enable[8] = { false, true, true, true, true, true, true, true };
 
 enum ReceiveState {
         GET_STX = 1,
@@ -109,7 +110,7 @@ enum Encoder1Mode {
 
 Rotary encoder1 = Rotary(ENCODER1_CHA_PIN, ENCODER1_CHB_PIN);
 Button encoder1_button = Button(ENCODER1_BTN_PIN, PULLUP);
-int encoder1_value = 0;
+volatile int encoder1_value = 0;
 int encoder1_value_prev = 0;
 bool encoder1_button_value = 0;
 
@@ -160,8 +161,8 @@ void setup() {
   Timer1.initialize(INTERRUPT_PERIOD_MICROSECONDS);
   Timer1.attachInterrupt(handleTimerTick);
 
-  for (unsigned int i = 0; i < sizeof(outputs); i++) {
-    pinMode(outputs[i], OUTPUT);
+  for (unsigned int i = 0; i < sizeof(output); i++) {
+    pinMode(output[i], OUTPUT);
     SetPWM(i, 0);
   }
 
@@ -185,6 +186,7 @@ void setup() {
   serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
 
   initBatteryMonitor();
+  initEncoders();
 }
 
 void setupWatchdogTimer(void) {
@@ -204,11 +206,12 @@ void setupWatchdogTimer(void) {
 void loop() {
 
   processSerialReceive();
+  processEncoders();
+  //processPWMEnable();
 
   if (base_timer_flag) {
     base_timer_flag = false;
 
-    processEncoders();
   }
 
   if(broadcast_flag) {
@@ -239,6 +242,15 @@ void loop() {
     processBatteryMonitor();
   }
 
+}
+
+void initEncoders(void) {
+ PCICR = 0b00000010; // Turn on PORTC pins
+ 
+ PCMSK0 = 0b00000000;
+ PCMSK1 = 0b00000011; // Interrupt on change of A0(14), A1(15)
+ PCMSK2 = 0b00000000;
+ 
 }
 
 void initBatteryMonitor(void) {
@@ -276,6 +288,17 @@ void processEncoderLEDState(void) {
     digitalWrite(ENCODER1_LED_PIN, 1);
   }
 }
+
+//void processPWMEnable(void) {
+//  for( int i = 0; i < 8; i++) {
+//    if(output_enable[i]) {
+//      SetPWM(output[i], output_value[i]);
+//    }
+//    else {
+//      SetPWM(output[i], 0);
+//    }
+//  }
+//}
 
 void processBatteryMonitor(void) {  
   battery_monitor_var[0].amps = ((float)adc_sum[0] / (float)adc_count[0]) * battery_monitor_const[0].amps_multiplier;
@@ -321,36 +344,13 @@ void processBatteryMonitor(void) {
 }
 
 void processEncoders() {
-  uint8_t result;
 
-  result = encoder1.process();
+  // Only do something if the encoder value has actually changed
+  if(encoder1_value != encoder1_value_prev) {
+    SetMemoryMap(MEMMAP_PWM_OUTPUT0, encoder1_value);
+    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));      
 
-  if(result != DIR_NONE) {
-
-    switch (encoder1_mode) {
-      case ENC1MODE_DIMMER:
-        if(result == DIR_CW) {
-          encoder1_value += ENCODER1_STEP;
-        }
-        else if(result == DIR_CCW) {
-          encoder1_value -= ENCODER1_STEP;
-        }
-    
-        encoder1_value = constrain(encoder1_value, 0, 100);
-    
-        // Only do something if the encoder value has actually changed
-        if(encoder1_value != encoder1_value_prev) {
-          SetMemoryMap(MEMMAP_PWM_OUTPUT0, encoder1_value);
-          serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));      
-        }
-    
-        encoder1_value_prev = encoder1_value;
-      break;
-
-      case ENC1MODE_NAVIGATE:
-        // TODO
-      break;
-    }
+    encoder1_value_prev = encoder1_value;
   }
 
   encoder1_button_value = encoder1_button.isPressed();
@@ -358,13 +358,15 @@ void processEncoders() {
   // TODO: Holding button down for a specific period of time changes encoder mode
   // TODO: Needs debouncing
   if(encoder1_button.stateChanged()) {
-    Serial.print("Button...");
-
-    if(encoder1_button_value) {
-      Serial.println("Down");
+    if(encoder1_button_value) { // BUTTON DOWN
+      if( GetMemoryMap(MEMMAP_PWM_OUTPUT0) > 0 ) {
+        SetMemoryMap(MEMMAP_PWM_OUTPUT0, 0);
+      }
+      else {
+        SetMemoryMap(MEMMAP_PWM_OUTPUT0, 100);
+      }
     }
-    else {
-      Serial.println("Up");
+    else { // BUTTON RELEASED
     }
   }
 
@@ -441,30 +443,32 @@ uint8_t cie1931_percent_to_byte(uint8_t percent) {
   return (uint8_t)(L * 255);
 }
 
-void SetPWM(uint8_t output, uint8_t value) {
-  output_values[output] = min(value, 100);
+void SetPWM(uint8_t output_num, uint8_t value) {
+  output_value[output_num] = min(value, 100);
 
-  if ( output < sizeof(output_values) ) { // Ensure write to array is within bounds
+  if ( output_num < sizeof(output_value) ) { // Ensure write to array is within bounds
 
     // Outputs 0-3 are hardware PWM capable, 4-5 need software control
-    if (output <= 3) {
+    if (output_num <= 3) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
-      analogWrite(outputs[output], cie1931_percent_to_byte(output_values[output]));
+      analogWrite(output[output_num], cie1931_percent_to_byte(output_value[output_num]));
     }
     else if ( (output >= 4) && (output <= 7) ) {
-      digitalWrite(outputs[output], output_values[output]);
+      digitalWrite( output[output_num], (output_value[output_num] > 0) );
     }
   }
 }
 
-uint8_t GetPWM(uint8_t output) {
-  return output_values[output];
+uint8_t GetPWM(uint8_t output_num) {
+  return output_value[output_num];
 }
 
 /*************************************************/
 /* SET VIRTUAL MEMORY MAP                        */
 /*************************************************/
 bool SetMemoryMap(uint16_t address, uint32_t data) {
+
+// TODO: Set should be followed by publishing the new data.  Everywhere else this has been done needs removed.
 
   switch (address) {
     // Switches
@@ -551,7 +555,7 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       SetPWM(address & 0x00000007, data);
 
       // Other variables linked to outputs - not sure if this is the best way to structure this...
-      if( outputs[address & 0x00000007] == CEILING_LIGHT) { encoder1_value = (uint8_t)data; }
+      if( output[address & 0x00000007] == CEILING_LIGHT) { encoder1_value = (uint8_t)data; }
       
       return true;
 
@@ -1152,4 +1156,39 @@ ISR(WDT_vect) {
   // Make sure to turn this off when you're sleeping...
   //debugFlashHexCode(ERR_FATAL_WDT_TIMEOUT, false);
   while (1); // Do nothing while waiting for the WDT to reset the system
+}
+
+ISR(PCINT1_vect) {
+  uint8_t result;
+////  struct EncoderData *encoder_data; // Encoder may be used in different modes
+//  int *counter;
+
+  result = encoder1.process();
+
+//  switch (encoder1_mode) {
+//    case ENC1MODE_DIMMER:
+//      ////*encoder_data = encoder1_data;
+//      //*counter = encoder1_value;
+//    break;
+//
+//    case ENC1MODE_NAVIGATE:
+//      // TODO
+//    break;
+//  }
+  
+  if(result == DIR_CW) {
+    ////encoder_data->counter += ENCODER1_STEP;
+    //*counter += ENCODER1_STEP;
+    encoder1_value += ENCODER1_STEP;
+  }
+  else if(result == DIR_CCW) {
+    ////encoder_data->counter -= ENCODER1_STEP;
+    //*counter -= ENCODER1_STEP;
+    encoder1_value -= ENCODER1_STEP;
+  }
+
+  ////encoder_data->counter = constrain(encoder_data->counter, encoder_data->min, encoder_data->max);
+  //*counter = constrain(*counter, 0, 100);
+  encoder1_value = constrain(encoder1_value, 0, 100);
+  
 }
