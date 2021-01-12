@@ -45,31 +45,27 @@
 
     Hardware Notes
 
-    D13/SCK - SPI to CAN module
-    D12/MISO - SPI to CAN module
-    D11/MOSI - SPI to CAN module
-    D10/SS - SPI to CAN module
-    D2/INT0 - Interrupt for CAN RX
+    D13/SCK
+    D12/MISO
+    D11/MOSI
+    D10/SS
+    D2/INT0 - Interrupt reserved for SPI device
 
-    D3/PWM - OUTPUT0
+    D3/PWM - OUTPUT0 (Ceiling light)
     D5/PWM - OUTPUT1
     D6/PWM - OUTPUT2
     D9/PWM - OUTPUT3
     D4 - OUTPUT4
     D7 - OUTPUT5
+    D8 - OUTPUT6 (Encoder LED)
+    ?? - OUTPUT7
 
-    A5/SCL - I2C Clock to ADC board
-    A4/SDA - I2C Data to ADC board
+    A5/SCL
+    A4/SDA
 
-
-    Broadcast Messages
-    ~~~~~~~~~~~~~~~~~~
-
-    00: Current shunt - house battery negative
-    01: Fuse panel load centre
-    02: Vehicle charging system
-    03: Inverter
-    04: Main lights, brightness value
+    A3 - Rotary Encoder BTN
+    A1 - Rotary Encoder CHA
+    A0 - Rotary Encoder CHB
 
 */
 
@@ -119,6 +115,47 @@ Adafruit_ADS1115 ads0(0x48);
 Adafruit_ADS1115 ads1(0x49);
 Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
+
+// TODO: To save some memory, consider referencing group string prefixes instead of the duplication below.
+static const char topic_name_01[] PROGMEM = "og/setting/broadcast_period_ms";
+static const char topic_name_02[] PROGMEM = "og/bm/0/volts";
+static const char topic_name_03[] PROGMEM = "og/bm/0/amps";
+static const char topic_name_04[] PROGMEM = "og/bm/0/ah";
+static const char topic_name_05[] PROGMEM = "og/bm/0/soc";
+static const char topic_name_06[] PROGMEM = "og/bm/0/amps_multiplier";
+static const char topic_name_07[] PROGMEM = "og/bm/0/volts_multiplier";
+static const char topic_name_08[] PROGMEM = "og/bm/0/amphours_capacity";
+static const char topic_name_09[] PROGMEM = "og/bm/0/volts_charged";
+static const char topic_name_10[] PROGMEM = "og/bm/0/minutes_charged_detection_time";
+static const char topic_name_11[] PROGMEM = "og/bm/0/current_threshold";
+static const char topic_name_12[] PROGMEM = "og/bm/0/tail_current_factor";
+static const char topic_name_13[] PROGMEM = "og/bm/0/peukert_factor";
+static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
+static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
+static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
+
+/* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
+static const Topic topic[] = {
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, topic_name_01 },
+
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, topic_name_02 },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, topic_name_03 },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, topic_name_04 },
+  { MEMMAP_BANK0_SOC,                       2,  -2, topic_name_05 },
+
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, topic_name_06 },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, topic_name_07 },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, topic_name_08 },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, topic_name_09 },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, topic_name_10 },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, topic_name_11 },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, topic_name_12 },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, topic_name_13 },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, topic_name_14 },
+
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, topic_name_15 },
+  { MEMMAP_PWM_OUTPUT6,                     1,   0, topic_name_16 },
+};
 
 enum ChargeState {
   CS_NONE,
@@ -187,6 +224,8 @@ void setup() {
 
   initBatteryMonitor();
   initEncoders();
+
+  returnInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 }
 
 void setupWatchdogTimer(void) {
@@ -218,9 +257,9 @@ void loop() {
     broadcast_flag = false;
 
     if(!inhibit_broadcast) {
-      broadcastPWMValues();
-      broadcastADCValues();
-      broadcastBatteryMonitor();
+//      broadcastPWMValues();
+//      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
+//      broadcastBatteryMonitor();
     }
   }
   
@@ -245,12 +284,16 @@ void loop() {
 }
 
 void initEncoders(void) {
- PCICR = 0b00000010; // Turn on PORTC pins
+  PCICR = 0b00000010; // Turn on PORTC pins
  
- PCMSK0 = 0b00000000;
- PCMSK1 = 0b00000011; // Interrupt on change of A0(14), A1(15)
- PCMSK2 = 0b00000000;
- 
+  PCMSK0 = 0b00000000;
+
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
+  PCMSK1 = 0b00000011; // Interrupt on change of A0(14), A1(15)
+  PCMSK2 = 0b00000000;
+#elif defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
+#warning "CODE STUB"
+#endif 
 }
 
 void initBatteryMonitor(void) {
@@ -365,11 +408,18 @@ void processEncoders() {
       else {
         SetMemoryMap(MEMMAP_PWM_OUTPUT0, 100);
       }
+      broadcastPWMValues(); // TODO: Remove this when SetMemoryMap makes the broadcast
     }
     else { // BUTTON RELEASED
     }
   }
 
+}
+
+void returnInterfaces(void) {
+  for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
+    serialize(MSG_RETURN_INTERFACE, "ibBS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name);
+  }
 }
 
 void broadcastPWMValues(void) {
@@ -384,6 +434,7 @@ void broadcastBatteryMonitor(void) {
   serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_SOC, (uint16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
 }
 
+ /* TODO: TO BE DEPRECATED! */
 void broadcastADCValues(void) {
   serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB0, (uint16_t)GetMemoryMap(0xB0)); // charger_input_current
   serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB1, (uint16_t)GetMemoryMap(0xB1)); // load_center_current
@@ -453,7 +504,7 @@ void SetPWM(uint8_t output_num, uint8_t value) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
       analogWrite(output[output_num], cie1931_percent_to_byte(output_value[output_num]));
     }
-    else if ( (output >= 4) && (output <= 7) ) {
+    else if ( (output_num >= 4) && (output_num <= 7) ) {
       digitalWrite( output[output_num], (output_value[output_num] > 0) );
     }
   }
@@ -560,14 +611,14 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       return true;
 
     // ADC read only inputs
-    case MEMMAP_ADC_0_01:
-    case MEMMAP_ADC_0_23:
-    case MEMMAP_ADC_1_01:
-    case MEMMAP_ADC_1_23:
-    case MEMMAP_ADC_2_0:
-    case MEMMAP_ADC_2_1:
-    case MEMMAP_ADC_2_2:
-    case MEMMAP_ADC_2_3:
+    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
       return false;
   }
 
@@ -613,19 +664,39 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
 
-    case MEMMAP_ADC_0_01:
-    case MEMMAP_ADC_0_23:
-    case MEMMAP_ADC_1_01:
-    case MEMMAP_ADC_1_23:
-    case MEMMAP_ADC_2_0:
-    case MEMMAP_ADC_2_1:
-    case MEMMAP_ADC_2_2:
-    case MEMMAP_ADC_2_3:
+    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
+    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
       return (uint16_t)(adc_sum[address & 0x0007] / adc_count[address & 0x0007]);
   }
 
   return 0;
 }
+
+/* ----- UNTESTED -----
+//CRC-8 - based on the CRC8 formulas by Dallas/Maxim
+//code released under the therms of the GNU GPL 3.0 license
+byte CRC8(const byte *data, byte len) {
+  byte crc = 0x00;
+  while (len--) {
+    byte extract = *data++;
+    for (byte tempI = 8; tempI; tempI--) {
+      byte sum = (crc ^ extract) & 0x01;
+      crc >>= 1;
+      if (sum) {
+        crc ^= 0x8C;
+      }
+      extract >>= 1;
+    }
+  }
+  return crc;
+}
+*/
 
 // Little endian (LSB first)
 // whitespace in format string is allowed/ignored, can help with readability
@@ -638,17 +709,19 @@ uint32_t GetMemoryMap(uint16_t address) {
 //    T: signed 24-bit whole number
 //    l: unsigned 32-bit whole number
 //    L: signed 32-bit whole number
-//    ////FUTURE//// s: pointer to string (non-printable characters will be stripped using isprint())
-//    [fixed/float types?]
+//    S: pointer to string (const __FlashStringHelper *) 
+//    s: pointer to string (const char *)
 
-// Returns false on error
+// TODO: Returns false on error - unused?
 bool serialize(uint16_t address, const char *fmt, ...) {
   va_list args;
   uint16_t i;
   uint16_t count;
   uint64_t value;
   //uint8_t checksum;
-  char buff[256];
+  char buff[255];
+  const char *p;
+  uint8_t len;
 
   i = 0;
   count = 0;
@@ -702,44 +775,76 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 //        break;
 
         case 'l':
-        case 'L':
           value = va_arg(args, uint32_t);
         break;
 
+        case 'L':
+          value = va_arg(args, int32_t);
+        break;
+
         case 't':
+          value = va_arg(args, uint32_t);
+        break;
+  
         case 'T':
-          value = 0x0000000000FFFFFF & va_arg(args, uint32_t);
+          value = va_arg(args, int32_t);
         break;
   
         case 'i':
-        case 'I':
           value = va_arg(args, uint16_t);
         break;
         
+        case 'I':
+          value = va_arg(args, int16_t);
+        break;
+        
         case 'b':
-        case 'B':
-          value = 0x00000000000000FF & va_arg(args, uint16_t);
+          value = va_arg(args, uint16_t);
         break;
 
-//        case 's':
-//        case 'S':
-//          int j = 0;
-//          while ( *((const char *)(args)) != '\0' ) {
-//            if( ( j < (sizeof(buff)-1) )  &&  isprint( *((const char *)(args)) ) ) {
-//              buff[j] = *((const char *)(args));
-//              j++;
-//            }
-//            args += 2;
-//          }
-//          buff[j] = '\0';
+        case 'B':
+          value = va_arg(args, int16_t);
+        break;
 
-          // DEBUGGING
-          //Serial.println();
-          //Serial.print("BUFF:(");
-          //Serial.print(buff);
-          //Serial.println(")");
+        case 'S':
+          p = (const char *)va_arg(args, const __FlashStringHelper * );
+
+//          len = 0;
+//          while ( (*p != '\0') && (len < ( sizeof(buff)-2 )) ) {
+//            if( isprint(*p) ) {
+//              buff[len] = *p;
+//              len++;
+//            }
+//          }
+//          buff[len] = '\0';
+
+//          // DEBUGGING
+//          Serial.println();
+//          Serial.print("BUFF:(");
+//          Serial.print(buff);
+//          Serial.println(")");
+//          
+        break;
+        
+        case 's':
+          p = va_arg(args, const char * );
+
+//          len = 0;
+//          while ( (*p != '\0') && (len < ( sizeof(buff)-2 )) ) {
+//            if( isprint(*p) ) {
+//              buff[len] = *p;
+//              len++;
+//            }
+//          }
+//          buff[len] = '\0';
+//
+//          // DEBUGGING
+//          Serial.println();
+//          Serial.print("BUFF:(");
+//          Serial.print(buff);
+//          Serial.println(")");
           
-        //break;
+        break;
       }
 
     //DEBUG//Serial.print("<"); Serial.print((uint32_t)value, HEX); Serial.println(">");
@@ -752,6 +857,8 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 //        Serial.print( (unsigned uint8_t)(value >> 32), HEX );
 //        // FALL THROUGH
 //      case 'f': 
+
+      // TODO: This has a lot of potential for optimization, but it works for now and we aren't running out of space or time.
       case 'l': 
       case 'L':
         Serial.print( (unsigned uint8_t)(value >> 28 ) & 0x0F, HEX ); // Print by nybble because HEX doesn't output leading '0'
@@ -773,11 +880,17 @@ bool serialize(uint16_t address, const char *fmt, ...) {
         Serial.print( (unsigned uint8_t)(value >> 0  ) & 0x0F, HEX );
       break;      
 
-// String will need to have a marker character prepended to differentiate from ASCII-HEX, TBD
-//      case 's': 
-//      case 'S': 
-//        Serial.print(buff);
-//      break;
+      case 'S':
+        Serial.write('"');
+        Serial.print( (const __FlashStringHelper *) p );
+        Serial.write('"');
+      break;
+
+      case 's': 
+        Serial.write('"');
+        Serial.print(*p);
+        Serial.write('"');
+      break;
 
     }
 
@@ -1063,6 +1176,12 @@ void parse_message(char *msg_buf) {
             serialize(MSG_GET_SET_ERROR, "");
           }
         }
+        break;
+
+        case MSG_GET_INTERFACES:
+          if (arg_count == 0) {
+            returnInterfaces();
+          }
         break;
     }
         

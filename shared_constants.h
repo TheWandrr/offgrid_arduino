@@ -16,8 +16,8 @@
 
 #define MSG_RESERVED_08		0x08
 
-#define MSG_GET_MEMMAP      0x09 /* Not sure yet how this is going to work, but it should allow the master to query writeable/readable addresses from the module */
-#define MSG_RETURN_MEMMAP   0x0A
+#define MSG_GET_INTERFACES     0x09 /* Query for available memory mapped topics, accessible with MSG_SET_X_X/MSG_GET_X_X */
+#define MSG_RETURN_INTERFACE   0x0A /* Return one message for each available interface when queried by MSG_GET_INTERFACES */
 
 #define MSG_RESERVED_10     0x10 
 #define MSG_GET_SET_ERROR   0x11 /* Sent by a module in response to a get/set request that could not be satisfied */
@@ -75,24 +75,31 @@
 #define MEMMAP_PWM_OUTPUT6                      MEMMAP_PWM_BASE + 6 /* 1 bytes, x1 */
 #define MEMMAP_PWM_OUTPUT7                      MEMMAP_PWM_BASE + 7 /* 1 bytes, x1 */
 
-#define ADC_0_01 0
-#define ADC_0_23 1
-#define ADC_1_01 2
-#define ADC_1_23 3
-#define ADC_2_0 4
-#define ADC_2_1 5
-#define ADC_2_2 6
-#define ADC_2_3 7
+#define ADC_0_01 0 /* TODO: TO BE DEPRECATED! */
+#define ADC_0_23 1 /* TODO: TO BE DEPRECATED! */
+#define ADC_1_01 2 /* TODO: TO BE DEPRECATED! */
+#define ADC_1_23 3 /* TODO: TO BE DEPRECATED! */
+#define ADC_2_0 4 /* TODO: TO BE DEPRECATED! */
+#define ADC_2_1 5 /* TODO: TO BE DEPRECATED! */
+#define ADC_2_2 6 /* TODO: TO BE DEPRECATED! */
+#define ADC_2_3 7 /* TODO: TO BE DEPRECATED! */
 
-#define MEMMAP_ADC_BASE							0x00B0
+#define MEMMAP_ADC_BASE							0x00B0 /* TODO: TO BE DEPRECATED! */
 
-#define MEMMAP_ADC_0_01                         MEMMAP_ADC_BASE + ADC_0_01 /* 2 bytes, raw */
-#define MEMMAP_ADC_0_23                         MEMMAP_ADC_BASE + ADC_0_23 /* 2 bytes, raw */
-#define MEMMAP_ADC_1_01                         MEMMAP_ADC_BASE + ADC_1_01 /* 2 bytes, raw */
-#define MEMMAP_ADC_1_23                         MEMMAP_ADC_BASE + ADC_1_23 /* 2 bytes, raw */
-#define MEMMAP_ADC_2_0                          MEMMAP_ADC_BASE + ADC_2_0 /* 2 bytes, raw */
-#define MEMMAP_ADC_2_1                          MEMMAP_ADC_BASE + ADC_2_1 /* 2 bytes, raw */
-#define MEMMAP_ADC_2_2                          MEMMAP_ADC_BASE + ADC_2_2 /* 2 bytes, raw */
-#define MEMMAP_ADC_2_3                          MEMMAP_ADC_BASE + ADC_2_3 /* 2 bytes, raw */
+#define MEMMAP_ADC_0_01                         MEMMAP_ADC_BASE + ADC_0_01 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_0_23                         MEMMAP_ADC_BASE + ADC_0_23 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_1_01                         MEMMAP_ADC_BASE + ADC_1_01 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_1_23                         MEMMAP_ADC_BASE + ADC_1_23 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_2_0                          MEMMAP_ADC_BASE + ADC_2_0 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_2_1                          MEMMAP_ADC_BASE + ADC_2_1 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_2_2                          MEMMAP_ADC_BASE + ADC_2_2 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+#define MEMMAP_ADC_2_3                          MEMMAP_ADC_BASE + ADC_2_3 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+
+struct Topic {
+  uint16_t address;
+  uint8_t bytes;
+  int8_t exponent;
+  const char * name;
+};
 
 #endif /* __SHARED_CONSTANTS_H */
