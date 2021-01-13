@@ -92,10 +92,18 @@
 #define MEMMAP_ADC_2_2                          MEMMAP_ADC_BASE + ADC_2_2 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 #define MEMMAP_ADC_2_3                          MEMMAP_ADC_BASE + ADC_2_3 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 
-struct Topic {
+enum InterfaceAccessMask {
+  AM_NONE =       0b00000000,
+  AM_READ =       0b00000001,
+  AM_WRITE =      0b00000010,
+  AM_READWRITE =  0b00000011,
+};
+
+struct Interface {
   uint16_t address;
   uint8_t bytes;
   int8_t exponent;
+  uint8_t access_mask;
   const char *name;
   const char *unit;
 };

@@ -170,7 +170,7 @@ void setup() {
   initBatteryMonitor();
   initEncoders();
 
-  returnInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
+  returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 }
 
 void setupWatchdogTimer(void) {
@@ -362,20 +362,20 @@ void processEncoders() {
 }
 
 void returnAllInterfaces(void) {
-  for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
-    serialize(MSG_RETURN_INTERFACE, "ibBSS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name, (const __FlashStringHelper *) topic[i].unit);
+  for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
+    serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
   }
 }
 
 void returnInterface(uint16_t address) {
-  for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
-    if(topic[i].address == address) {
-      serialize(MSG_RETURN_INTERFACE, "ibBSS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name, (const __FlashStringHelper *) topic[i].unit);
-      return;
+  for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
+    if(interface[i].address == address) {
+      serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
+      return true;
     }
   }
 
-  serialize(MSG_GET_INTERFACE_ERROR, "i", topic[i].address); // Not found if we didn't return already
+  serialize(MSG_GET_INTERFACE_ERROR, "i", address); // Not found if we didn't return already
 }
 
 void broadcastPWMValues(void) {
@@ -1097,7 +1097,7 @@ void parse_message(char *msg_buf) {
         }
         break;
 
-        case MSG_GET_INTERFACES:
+        case MSG_GET_INTERFACE:
           if (arg_count == 0) {
             returnAllInterfaces();
           }
@@ -1105,7 +1105,7 @@ void parse_message(char *msg_buf) {
             returnInterface((uint16_t)arg[0]);
           }
           else {
-            serialize(MSG_GET_INTERFACE_ERROR, "i", topic[i].address); // Not found if we didn't return already
+              serialize(MSG_GET_INTERFACE_ERROR, "");
           }
         break;
     }

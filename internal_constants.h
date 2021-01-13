@@ -125,26 +125,26 @@ static const char topic_unit_15[] PROGMEM = "%";
 static const char topic_unit_16[] PROGMEM = "%";
 
 /* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
-static const Topic topic[] = {
-  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, topic_name_01, topic_unit_01 },
+static const Interface interface[] = {
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, AM_READWRITE, topic_name_01, topic_unit_01 },
 
-  { MEMMAP_BANK0_VOLTS,                     2,  -2, topic_name_02, topic_unit_02 },
-  { MEMMAP_BANK0_AMPS,                      2,  -1, topic_name_03, topic_unit_03 },
-  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, topic_name_04, topic_unit_04 },
-  { MEMMAP_BANK0_SOC,                       2,  -2, topic_name_05, topic_unit_05 },
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      topic_name_02, topic_unit_02 },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      topic_name_03, topic_unit_03 },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, topic_name_04, topic_unit_04 },
+  { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, topic_name_05, topic_unit_05 },
 
-  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, topic_name_06, topic_unit_06 },
-  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, topic_name_07, topic_unit_07 },
-  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, topic_name_08, topic_unit_08 },
-  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, topic_name_09, topic_unit_09 },
-  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, topic_name_10, topic_unit_10 },
-  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, topic_name_11, topic_unit_11 },
-  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, topic_name_12, topic_unit_12 },
-  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, topic_name_13, topic_unit_13 },
-  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, topic_name_14, topic_unit_14 },
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, topic_name_06, topic_unit_06 },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, topic_name_07, topic_unit_07 },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, AM_READWRITE, topic_name_08, topic_unit_08 },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, AM_READWRITE, topic_name_09, topic_unit_09 },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, AM_READWRITE, topic_name_10, topic_unit_10 },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, AM_READWRITE, topic_name_11, topic_unit_11 },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, AM_READWRITE, topic_name_12, topic_unit_12 },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, topic_name_13, topic_unit_13 },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, topic_name_14, topic_unit_14 },
 
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, topic_name_15, topic_unit_15 },
-  { MEMMAP_PWM_OUTPUT6,                     1,   0, topic_name_16, topic_unit_16 },
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, topic_name_15, topic_unit_15 },
+  { MEMMAP_PWM_OUTPUT6,                     1,   0, AM_READWRITE, topic_name_16, topic_unit_16 },
 };
 
 #endif /* __INTERNAL_CONSTANTS_H */
