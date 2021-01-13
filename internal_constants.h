@@ -48,6 +48,13 @@
 #define ERR_FATAL_RX_QUEUE_OVERFLOW					0x21
 #define ERR_FATAL_TX_QUEUE_OVERFLOW					0x22
 
+enum ChargeState {
+  CS_NONE,
+  CS_CHARGING,
+  CS_DISCHARGING,
+  CS_CHARGED
+} ;
+
 struct BMConst {
   double amps_multiplier; // Used to set mv/A, including any calibration
   double volts_multiplier; // for calibration
@@ -58,6 +65,14 @@ struct BMConst {
   float tail_current_factor; // Current at which the battery is considered "charged"
   float peukert_factor;
   float charge_efficiency_factor;
+};
+
+struct BMVar {
+  float volts; // Battery voltage at last sample
+  float amps; // Battery current at last sample
+  float amphours_remaining; // Tracks coulombs
+  float percent_soc;
+  enum ChargeState charge_state;
 };
 
 // TODO: This needs to be manually kept in sync with the above structure.  Find a better way that automatically adjusts?
@@ -72,5 +87,64 @@ const uint8_t eeaddr_bank0_current_threshold = eeaddr_bank0_minutes_charged_dete
 const uint8_t eeaddr_bank0_tail_current_factor = eeaddr_bank0_current_threshold + sizeof(float);
 const uint8_t eeaddr_bank0_peukert_factor = eeaddr_bank0_tail_current_factor + sizeof(float);
 const uint8_t eeaddr_bank0_charge_efficiency_factor = eeaddr_bank0_peukert_factor + sizeof(float);
+
+
+// TODO: To save some memory, consider referencing group string prefixes instead of the duplication below.
+static const char topic_name_01[] PROGMEM = "og/setting/broadcast_period_ms";
+static const char topic_name_02[] PROGMEM = "og/bm/0/volts";
+static const char topic_name_03[] PROGMEM = "og/bm/0/amps";
+static const char topic_name_04[] PROGMEM = "og/bm/0/ah";
+static const char topic_name_05[] PROGMEM = "og/bm/0/soc%";
+static const char topic_name_06[] PROGMEM = "og/bm/0/amps_multiplier";
+static const char topic_name_07[] PROGMEM = "og/bm/0/volts_multiplier";
+static const char topic_name_08[] PROGMEM = "og/bm/0/amphours_capacity";
+static const char topic_name_09[] PROGMEM = "og/bm/0/volts_charged";
+static const char topic_name_10[] PROGMEM = "og/bm/0/minutes_charged_detection_time";
+static const char topic_name_11[] PROGMEM = "og/bm/0/current_threshold";
+static const char topic_name_12[] PROGMEM = "og/bm/0/tail_current_factor";
+static const char topic_name_13[] PROGMEM = "og/bm/0/peukert_factor";
+static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
+static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
+static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
+
+static const char topic_unit_01[] PROGMEM = "ms";
+static const char topic_unit_02[] PROGMEM = "V";
+static const char topic_unit_03[] PROGMEM = "A";
+static const char topic_unit_04[] PROGMEM = "Ah";
+static const char topic_unit_05[] PROGMEM = "%";
+static const char topic_unit_06[] PROGMEM = "";
+static const char topic_unit_07[] PROGMEM = "";
+static const char topic_unit_08[] PROGMEM = "Ah";
+static const char topic_unit_09[] PROGMEM = "V";
+static const char topic_unit_10[] PROGMEM = "min";
+static const char topic_unit_11[] PROGMEM = "A";
+static const char topic_unit_12[] PROGMEM = "A";
+static const char topic_unit_13[] PROGMEM = "";
+static const char topic_unit_14[] PROGMEM = "";
+static const char topic_unit_15[] PROGMEM = "%";
+static const char topic_unit_16[] PROGMEM = "%";
+
+/* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
+static const Topic topic[] = {
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, topic_name_01, topic_unit_01 },
+
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, topic_name_02, topic_unit_02 },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, topic_name_03, topic_unit_03 },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, topic_name_04, topic_unit_04 },
+  { MEMMAP_BANK0_SOC,                       2,  -2, topic_name_05, topic_unit_05 },
+
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, topic_name_06, topic_unit_06 },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, topic_name_07, topic_unit_07 },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, topic_name_08, topic_unit_08 },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, topic_name_09, topic_unit_09 },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, topic_name_10, topic_unit_10 },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, topic_name_11, topic_unit_11 },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, topic_name_12, topic_unit_12 },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, topic_name_13, topic_unit_13 },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, topic_name_14, topic_unit_14 },
+
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, topic_name_15, topic_unit_15 },
+  { MEMMAP_PWM_OUTPUT6,                     1,   0, topic_name_16, topic_unit_16 },
+};
 
 #endif /* __INTERNAL_CONSTANTS_H */

@@ -99,7 +99,8 @@ struct Topic {
   uint16_t address;
   uint8_t bytes;
   int8_t exponent;
-  const char * name;
+  const char *name;
+  const char *unit;
 };
 
 #endif /* __SHARED_CONSTANTS_H */

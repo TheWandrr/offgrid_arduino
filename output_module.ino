@@ -116,65 +116,8 @@ Adafruit_ADS1115 ads1(0x49);
 Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
-// TODO: To save some memory, consider referencing group string prefixes instead of the duplication below.
-// Topic strings contain "topic/name/with/levels,UNITS".  No units given by no comma or nothing following comma.
-static const char name_unit_01[] PROGMEM = "og/setting/broadcast_period_ms,ms";
-static const char name_unit_02[] PROGMEM = "og/bm/0/volts,V";
-static const char name_unit_03[] PROGMEM = "og/bm/0/amps,A";
-static const char name_unit_04[] PROGMEM = "og/bm/0/ah,Ah";
-static const char name_unit_05[] PROGMEM = "og/bm/0/soc,%";
-static const char name_unit_06[] PROGMEM = "og/bm/0/amps_multiplier";
-static const char name_unit_07[] PROGMEM = "og/bm/0/volts_multiplier,";
-static const char name_unit_08[] PROGMEM = "og/bm/0/amphours_capacity,Ah";
-static const char name_unit_09[] PROGMEM = "og/bm/0/volts_charged,V";
-static const char name_unit_10[] PROGMEM = "og/bm/0/minutes_charged_detection_time,min";
-static const char name_unit_11[] PROGMEM = "og/bm/0/current_threshold,A";
-static const char name_unit_12[] PROGMEM = "og/bm/0/tail_current_factor,A";
-static const char name_unit_13[] PROGMEM = "og/bm/0/peukert_factor,";
-static const char name_unit_14[] PROGMEM = "og/bm/0/charge_efficiency_factor,";
-static const char name_unit_15[] PROGMEM = "og/house/light/ceiling,%";
-static const char name_unit_16[] PROGMEM = "og/house/light/ceiling_encoder,%";
-
-/* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
-static const Topic topic[] = {
-  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, name_unit_01 },
-
-  { MEMMAP_BANK0_VOLTS,                     2,  -2, name_unit_02 },
-  { MEMMAP_BANK0_AMPS,                      2,  -1, name_unit_03 },
-  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, name_unit_04 },
-  { MEMMAP_BANK0_SOC,                       2,  -2, name_unit_05 },
-
-  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, name_unit_06 },
-  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, name_unit_07 },
-  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, name_unit_08 },
-  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, name_unit_09 },
-  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, name_unit_10 },
-  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, name_unit_11 },
-  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, name_unit_12 },
-  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, name_unit_13 },
-  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, name_unit_14 },
-
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, name_unit_15 },
-  { MEMMAP_PWM_OUTPUT6,                     1,   0, name_unit_16 },
-};
-
-enum ChargeState {
-  CS_NONE,
-  CS_CHARGING,
-  CS_DISCHARGING,
-  CS_CHARGED
-} ;
-
 struct BMConst battery_monitor_const[2];
-
-// These are mapped into the address space for read/write where appropriate
-struct {
-  float volts; // Battery voltage at last sample
-  float amps; // Battery current at last sample
-  float amphours_remaining; // Tracks coulombs
-  float percent_soc;
-  enum ChargeState charge_state;
-} battery_monitor_var[2];
+struct BMVar battery_monitor_var[2];
 
 int32_t adc_sum[8] = {0};
 int8_t adc_count[8] = {0};
@@ -219,7 +162,7 @@ void setup() {
 
   //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
 
-  uint8_t last_mcp_eflg=0, last_mcp_rec=0, last_mcp_tec=0, last_rx_queue_count=0, last_rx_queue_count_max=0;
+  //uint8_t last_mcp_eflg=0, last_mcp_rec=0, last_mcp_tec=0, last_rx_queue_count=0, last_rx_queue_count_max=0;
 
 //  serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
   serialize(MSG_POWER_ON, "");
@@ -420,7 +363,7 @@ void processEncoders() {
 
 void returnInterfaces(void) {
   for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
-    serialize(MSG_RETURN_INTERFACE, "ibBS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name);
+    serialize(MSG_RETURN_INTERFACE, "ibBSS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name, (const __FlashStringHelper *) topic[i].unit);
   }
 }
 
@@ -702,6 +645,7 @@ byte CRC8(const byte *data, byte len) {
 
 // Little endian (LSB first)
 // whitespace in format string is allowed/ignored, can help with readability
+// double-quote and backslash in string must be escaped - use C convention " \" "," \\ "
 // format characters include:
 //    b: unsigned 8-bit whole number
 //    B: signed 8-bit whole number
@@ -721,9 +665,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   uint16_t count;
   uint64_t value;
   //uint8_t checksum;
-  char buff[255];
-  const char *p;
-  uint8_t len;
+  const char *p = NULL;
 
   i = 0;
   count = 0;
@@ -810,42 +752,10 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 
         case 'S':
           p = (const char *)va_arg(args, const __FlashStringHelper * );
-
-//          len = 0;
-//          while ( (*p != '\0') && (len < ( sizeof(buff)-2 )) ) {
-//            if( isprint(*p) ) {
-//              buff[len] = *p;
-//              len++;
-//            }
-//          }
-//          buff[len] = '\0';
-
-//          // DEBUGGING
-//          Serial.println();
-//          Serial.print("BUFF:(");
-//          Serial.print(buff);
-//          Serial.println(")");
-//          
         break;
         
         case 's':
           p = va_arg(args, const char * );
-
-//          len = 0;
-//          while ( (*p != '\0') && (len < ( sizeof(buff)-2 )) ) {
-//            if( isprint(*p) ) {
-//              buff[len] = *p;
-//              len++;
-//            }
-//          }
-//          buff[len] = '\0';
-//
-//          // DEBUGGING
-//          Serial.println();
-//          Serial.print("BUFF:(");
-//          Serial.print(buff);
-//          Serial.println(")");
-          
         break;
       }
 
@@ -883,15 +793,11 @@ bool serialize(uint16_t address, const char *fmt, ...) {
       break;      
 
       case 'S':
-        Serial.write('"');
-        Serial.print( (const __FlashStringHelper *) p );
-        Serial.write('"');
+        Serial.write('"'); Serial.print( (const __FlashStringHelper *) p ); Serial.write('"');
       break;
 
       case 's': 
-        Serial.write('"');
-        Serial.print(*p);
-        Serial.write('"');
+        Serial.write('"'); Serial.print(*p); Serial.write('"');
       break;
 
     }
