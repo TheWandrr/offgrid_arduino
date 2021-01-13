@@ -804,10 +804,12 @@ bool serialize(uint16_t address, const char *fmt, ...) {
       break;      
 
       case 'S':
+        // TODO: Strip out characters from the string that will cause problems (unescaped?, comma, colon?)
         Serial.write('"'); Serial.print( (const __FlashStringHelper *) p ); Serial.write('"');
       break;
 
       case 's': 
+        // TODO: Strip out characters from the string that will cause problems (unescaped?, comma, colon?)
         Serial.write('"'); Serial.print(*p); Serial.write('"');
       break;
 
