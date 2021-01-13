@@ -117,44 +117,45 @@ Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
 // TODO: To save some memory, consider referencing group string prefixes instead of the duplication below.
-static const char topic_name_01[] PROGMEM = "og/setting/broadcast_period_ms";
-static const char topic_name_02[] PROGMEM = "og/bm/0/volts";
-static const char topic_name_03[] PROGMEM = "og/bm/0/amps";
-static const char topic_name_04[] PROGMEM = "og/bm/0/ah";
-static const char topic_name_05[] PROGMEM = "og/bm/0/soc";
-static const char topic_name_06[] PROGMEM = "og/bm/0/amps_multiplier";
-static const char topic_name_07[] PROGMEM = "og/bm/0/volts_multiplier";
-static const char topic_name_08[] PROGMEM = "og/bm/0/amphours_capacity";
-static const char topic_name_09[] PROGMEM = "og/bm/0/volts_charged";
-static const char topic_name_10[] PROGMEM = "og/bm/0/minutes_charged_detection_time";
-static const char topic_name_11[] PROGMEM = "og/bm/0/current_threshold";
-static const char topic_name_12[] PROGMEM = "og/bm/0/tail_current_factor";
-static const char topic_name_13[] PROGMEM = "og/bm/0/peukert_factor";
-static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
-static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
-static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
+// Topic strings contain "topic/name/with/levels,UNITS".  No units given by no comma or nothing following comma.
+static const char name_unit_01[] PROGMEM = "og/setting/broadcast_period_ms,ms";
+static const char name_unit_02[] PROGMEM = "og/bm/0/volts,V";
+static const char name_unit_03[] PROGMEM = "og/bm/0/amps,A";
+static const char name_unit_04[] PROGMEM = "og/bm/0/ah,Ah";
+static const char name_unit_05[] PROGMEM = "og/bm/0/soc,%";
+static const char name_unit_06[] PROGMEM = "og/bm/0/amps_multiplier";
+static const char name_unit_07[] PROGMEM = "og/bm/0/volts_multiplier,";
+static const char name_unit_08[] PROGMEM = "og/bm/0/amphours_capacity,Ah";
+static const char name_unit_09[] PROGMEM = "og/bm/0/volts_charged,V";
+static const char name_unit_10[] PROGMEM = "og/bm/0/minutes_charged_detection_time,min";
+static const char name_unit_11[] PROGMEM = "og/bm/0/current_threshold,A";
+static const char name_unit_12[] PROGMEM = "og/bm/0/tail_current_factor,A";
+static const char name_unit_13[] PROGMEM = "og/bm/0/peukert_factor,";
+static const char name_unit_14[] PROGMEM = "og/bm/0/charge_efficiency_factor,";
+static const char name_unit_15[] PROGMEM = "og/house/light/ceiling,%";
+static const char name_unit_16[] PROGMEM = "og/house/light/ceiling_encoder,%";
 
 /* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Topic topic[] = {
-  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, topic_name_01 },
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, name_unit_01 },
 
-  { MEMMAP_BANK0_VOLTS,                     2,  -2, topic_name_02 },
-  { MEMMAP_BANK0_AMPS,                      2,  -1, topic_name_03 },
-  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, topic_name_04 },
-  { MEMMAP_BANK0_SOC,                       2,  -2, topic_name_05 },
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, name_unit_02 },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, name_unit_03 },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, name_unit_04 },
+  { MEMMAP_BANK0_SOC,                       2,  -2, name_unit_05 },
 
-  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, topic_name_06 },
-  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, topic_name_07 },
-  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, topic_name_08 },
-  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, topic_name_09 },
-  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, topic_name_10 },
-  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, topic_name_11 },
-  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, topic_name_12 },
-  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, topic_name_13 },
-  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, topic_name_14 },
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, name_unit_06 },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, name_unit_07 },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, name_unit_08 },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, name_unit_09 },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, name_unit_10 },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, name_unit_11 },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, name_unit_12 },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, name_unit_13 },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, name_unit_14 },
 
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, topic_name_15 },
-  { MEMMAP_PWM_OUTPUT6,                     1,   0, topic_name_16 },
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, name_unit_15 },
+  { MEMMAP_PWM_OUTPUT6,                     1,   0, name_unit_16 },
 };
 
 enum ChargeState {
@@ -220,7 +221,8 @@ void setup() {
 
   uint8_t last_mcp_eflg=0, last_mcp_rec=0, last_mcp_tec=0, last_rx_queue_count=0, last_rx_queue_count_max=0;
 
-  serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
+//  serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
+  serialize(MSG_POWER_ON, "");
 
   initBatteryMonitor();
   initEncoders();
@@ -257,9 +259,9 @@ void loop() {
     broadcast_flag = false;
 
     if(!inhibit_broadcast) {
-//      broadcastPWMValues();
-//      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
-//      broadcastBatteryMonitor();
+      broadcastPWMValues();
+      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
+      broadcastBatteryMonitor();
     }
   }
   
