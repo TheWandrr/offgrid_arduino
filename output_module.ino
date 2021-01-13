@@ -361,10 +361,21 @@ void processEncoders() {
 
 }
 
-void returnInterfaces(void) {
+void returnAllInterfaces(void) {
   for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
     serialize(MSG_RETURN_INTERFACE, "ibBSS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name, (const __FlashStringHelper *) topic[i].unit);
   }
+}
+
+void returnInterface(uint16_t address) {
+  for (unsigned int i = 0; i < ( sizeof(topic) / sizeof(struct Topic) ); i++) {
+    if(topic[i].address == address) {
+      serialize(MSG_RETURN_INTERFACE, "ibBSS", topic[i].address, topic[i].bytes, topic[i].exponent, (const __FlashStringHelper *) topic[i].name, (const __FlashStringHelper *) topic[i].unit);
+      return;
+    }
+  }
+
+  serialize(MSG_GET_INTERFACE_ERROR, "i", topic[i].address); // Not found if we didn't return already
 }
 
 void broadcastPWMValues(void) {
@@ -1030,7 +1041,7 @@ void parse_message(char *msg_buf) {
             serialize(MSG_RETURN_8_8, "bb", (uint8_t)arg[0], (uint8_t)GetMemoryMap(arg[0]));
           }
           else {
-            serialize(MSG_GET_SET_ERROR, "");
+            serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
           }
           
         }
@@ -1041,7 +1052,7 @@ void parse_message(char *msg_buf) {
           serialize(MSG_RETURN_8_8, "bb", (uint8_t)arg[0], (uint8_t)GetMemoryMap(arg[0]));
         }
         else {
-          serialize(MSG_GET_SET_ERROR, "");
+          serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
         }
         break;
 
@@ -1051,7 +1062,7 @@ void parse_message(char *msg_buf) {
             serialize(MSG_RETURN_8_16, "bi", (uint8_t)arg[0], (uint16_t)GetMemoryMap(arg[0]));
           }
           else {
-            serialize(MSG_GET_SET_ERROR, "");
+            serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
           }
         }
         break;
@@ -1061,7 +1072,7 @@ void parse_message(char *msg_buf) {
           serialize(MSG_RETURN_8_16, "bi", (uint8_t)arg[0], (uint16_t)GetMemoryMap(arg[0]));
         }
         else {
-          serialize(MSG_GET_SET_ERROR, "");
+          serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
         }
         break;
 
@@ -1070,7 +1081,7 @@ void parse_message(char *msg_buf) {
           serialize(MSG_RETURN_8_32, "bl", (uint8_t)arg[0], (uint32_t)GetMemoryMap(arg[0]));
         }
         else {
-          serialize(MSG_GET_SET_ERROR, "");
+          serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
         }
         break;
 
@@ -1081,14 +1092,20 @@ void parse_message(char *msg_buf) {
             serialize(MSG_RETURN_8_32, "bl", (uint8_t)arg[0], (uint32_t)GetMemoryMap(arg[0]));
           }
           else {
-            serialize(MSG_GET_SET_ERROR, "");
+            serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
           }
         }
         break;
 
         case MSG_GET_INTERFACES:
           if (arg_count == 0) {
-            returnInterfaces();
+            returnAllInterfaces();
+          }
+          else if (arg_count == 1) {
+            returnInterface((uint16_t)arg[0]);
+          }
+          else {
+            serialize(MSG_GET_INTERFACE_ERROR, "i", topic[i].address); // Not found if we didn't return already
           }
         break;
     }

@@ -6,18 +6,15 @@
 #define MSG_RESERVED_01		0x01
 #define MSG_RESERVED_02		0x02
 #define MSG_RESERVED_03		0x03
-#define MSG_RESERVED_04		0x04
-#define MSG_RESERVED_05		0x05
-
-/* TODO: Consider grouping these under a MSG_CONTROL with sub messages (CTRLMSG_KEEP_ALIVE, etc) in the second byte.  This way we don't use up the rest unnecessarily. */
+#define MSG_RESERVED_04   0x04
+#define MSG_RESERVED_05   0x05
 
 #define MSG_KEEP_ALIVE		0x06
 #define MSG_POWER_ON		0x07
 
-#define MSG_RESERVED_08		0x08
-
-#define MSG_GET_INTERFACES     0x09 /* Query for available memory mapped topics, accessible with MSG_SET_X_X/MSG_GET_X_X */
-#define MSG_RETURN_INTERFACE   0x0A /* Return one message for each available interface when queried by MSG_GET_INTERFACES */
+#define MSG_GET_INTERFACE       0x08 /* Query for available memory mapped topics, accessible with MSG_SET_X_X/MSG_GET_X_X.  No data requests that the device return all available interfaces.  Data=address returns only the interface associated with that address, or error/nothing */
+#define MSG_RETURN_INTERFACE    0x09 /* Return one message for each available interface when queried by MSG_GET_INTERFACES */
+#define MSG_GET_INTERFACE_ERROR 0x0A
 
 #define MSG_RESERVED_10     0x10 
 #define MSG_GET_SET_ERROR   0x11 /* Sent by a module in response to a get/set request that could not be satisfied */
