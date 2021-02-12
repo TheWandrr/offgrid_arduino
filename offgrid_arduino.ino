@@ -289,11 +289,13 @@ void processEncoderLEDState(void) {
 //}
 
 void processBatteryMonitor(void) {  
+  // TODO: Consider a way to process all battery monitor instances consistently in a loop
   battery_monitor_var[0].amps = ((float)adc_sum[0] / (float)adc_count[0]) * battery_monitor_const[0].amps_multiplier;
   battery_monitor_var[0].volts = ((float)adc_sum[4] / (float)adc_count[4]) * battery_monitor_const[0].volts_multiplier;
 //  battery_monitor_var[1].amps = (float)(adc_sum[2] / adc_count[2]) * battery_monitor_const[1].amps_multiplier;
 //  battery_monitor_var[1].volts = (float)(adc_sum[5] / adc_count[5]) * battery_monitor_const[1].volts_multiplier;
 
+  // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
