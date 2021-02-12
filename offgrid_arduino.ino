@@ -3,10 +3,10 @@
 #include <TimerOne.h>
 #include <Adafruit_ADS1015.h>
 #include <CircularBuffer.h>
-#include <rotary.h>
+#include <Rotary.h> // https://github.com/brianlow/Rotary.git
 
 //#include <SPI.h>
-#include <Button.h>
+#include <Button.h> // https://github.com/jimmybyrum/arduino/git
 //#include <SDHT.h>
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
