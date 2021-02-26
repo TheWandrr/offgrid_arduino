@@ -70,9 +70,8 @@
 */
 
 // Look up table for converting ID to actual output
-const byte output[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7}; // TODO: [7] is a placeholder
+const byte output[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7};
 byte output_value[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
-//bool output_enable[8] = { false, true, true, true, true, true, true, true };
 
 enum ReceiveState {
         GET_STX = 1,
@@ -147,8 +146,6 @@ void setup() {
     SetPWM(i, 0);
   }
 
-  SetPWM(0, 0x00); // Just keep it off so it doesn't flicker on reset - which is rather hard to sleep through.
-
   ads0.setGain(ADS1115_0_GAIN);
   ads1.setGain(ADS1115_1_GAIN);
   ads2.setGain(ADS1115_2_GAIN);
@@ -167,8 +164,8 @@ void setup() {
 //  serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
   serialize(MSG_POWER_ON, "");
 
-  initBatteryMonitor();
   initEncoders();
+  initBatteryMonitor();
 
   returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 }
@@ -188,7 +185,6 @@ void setupWatchdogTimer(void) {
 }
 
 void loop() {
-
   processSerialReceive();
   processEncoders();
   //processPWMEnable();
@@ -229,15 +225,16 @@ void loop() {
 }
 
 void initEncoders(void) {
+#if defined(ARDUINO_AVR_NANO)
   PCICR = 0b00000010; // Turn on PORTC pins
- 
   PCMSK0 = 0b00000000;
-
-#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__)
   PCMSK1 = 0b00000011; // Interrupt on change of A0(14), A1(15)
   PCMSK2 = 0b00000000;
-#elif defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega16U4__)
-#warning "CODE STUB"
+#elif defined(ARDUINO_AVR_LEONARDO)
+  PCICR = 0b00000001;
+  PCMSK0 = 0b00110000;
+#else
+  #error "CODE STUB"
 #endif 
 }
 
@@ -270,23 +267,12 @@ void initBatteryMonitor(void) {
 // TODO: This could be used to signal error codes as well
 void processEncoderLEDState(void) {
   if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 0) {
-    digitalWrite(ENCODER1_LED_PIN, 0);
+    SetPWM(1, 15);
   }
   else {
-    digitalWrite(ENCODER1_LED_PIN, 1);
+    SetPWM(1, 0);
   }
 }
-
-//void processPWMEnable(void) {
-//  for( int i = 0; i < 8; i++) {
-//    if(output_enable[i]) {
-//      SetPWM(output[i], output_value[i]);
-//    }
-//    else {
-//      SetPWM(output[i], 0);
-//    }
-//  }
-//}
 
 void processBatteryMonitor(void) {  
   battery_monitor_var[0].amps = ((float)adc_sum[0] / (float)adc_count[0]) * battery_monitor_const[0].amps_multiplier;
@@ -335,6 +321,7 @@ void processEncoders() {
 
   // Only do something if the encoder value has actually changed
   if(encoder1_value != encoder1_value_prev) {
+    //Serial.println(encoder1_value);
     SetMemoryMap(MEMMAP_PWM_OUTPUT0, encoder1_value);
     serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));      
 
@@ -367,7 +354,7 @@ void returnAllInterfaces(void) {
   }
 }
 
-void returnInterface(uint16_t address) {
+bool returnInterface(uint16_t address) {
   for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
     if(interface[i].address == address) {
       serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
@@ -456,9 +443,12 @@ void SetPWM(uint8_t output_num, uint8_t value) {
   if ( output_num < sizeof(output_value) ) { // Ensure write to array is within bounds
 
     // Outputs 0-3 are hardware PWM capable, 4-5 need software control
+    // TODO: This is platform dependent!  Create a structure that makes porting easier.
     if (output_num <= 3) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
       analogWrite(output[output_num], cie1931_percent_to_byte(output_value[output_num]));
+      //Serial.println(cie1931_percent_to_byte(output_value[output_num]));
+      //Serial.println("\n");
     }
     else if ( (output_num >= 4) && (output_num <= 7) ) {
       digitalWrite( output[output_num], (output_value[output_num] > 0) );
@@ -1204,7 +1194,13 @@ ISR(WDT_vect) {
   while (1); // Do nothing while waiting for the WDT to reset the system
 }
 
+#if defined(ARDUINO_AVR_NANO)
 ISR(PCINT1_vect) {
+#elif defined(ARDUINO_AVR_LEONARDO)
+ISR(PCINT0_vect) {
+#else
+  #error CODE STUB
+#endif  
   uint8_t result;
 ////  struct EncoderData *encoder_data; // Encoder may be used in different modes
 //  int *counter;

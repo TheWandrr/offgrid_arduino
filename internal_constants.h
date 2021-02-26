@@ -1,6 +1,86 @@
 #ifndef __INTERNAL_CONSTANTS_H
 #define __INTERNAL_CONSTANTS_H
 
+#if defined(TEENSYDUINO) 
+
+    //  --------------- Teensy -----------------
+
+    #if defined(__AVR_ATmega32U4__)
+        #define BOARD "Teensy 2.0"
+    #elif defined(__AVR_AT90USB1286__)       
+        #define BOARD "Teensy++ 2.0"
+    #elif defined(__MK20DX128__)       
+        #define BOARD "Teensy 3.0"
+    #elif defined(__MK20DX256__)       
+        #define BOARD "Teensy 3.2" // and Teensy 3.1 (obsolete)
+    #elif defined(__MKL26Z64__)       
+        #define BOARD "Teensy LC"
+    #elif defined(__MK64FX512__)
+        #define BOARD "Teensy 3.5"
+    #elif defined(__MK66FX1M0__)
+        #define BOARD "Teensy 3.6"
+    #else
+       #error "Unknown board"
+    #endif
+
+#else // --------------- Arduino ------------------
+
+    #if   defined(ARDUINO_AVR_ADK)       
+        #define BOARD "Mega Adk"
+    #elif defined(ARDUINO_AVR_BT)    // Bluetooth
+        #define BOARD "Bt"
+    #elif defined(ARDUINO_AVR_DUEMILANOVE)       
+        #define BOARD "Duemilanove"
+    #elif defined(ARDUINO_AVR_ESPLORA)       
+        #define BOARD "Esplora"
+    #elif defined(ARDUINO_AVR_ETHERNET)       
+        #define BOARD "Ethernet"
+    #elif defined(ARDUINO_AVR_FIO)       
+        #define BOARD "Fio"
+    #elif defined(ARDUINO_AVR_GEMMA)
+        #define BOARD "Gemma"
+    #elif defined(ARDUINO_AVR_LEONARDO)       
+        #define BOARD "Leonardo"
+    #elif defined(ARDUINO_AVR_LILYPAD)
+        #define BOARD "Lilypad"
+    #elif defined(ARDUINO_AVR_LILYPAD_USB)
+        #define BOARD "Lilypad Usb"
+    #elif defined(ARDUINO_AVR_MEGA)       
+        #define BOARD "Mega"
+    #elif defined(ARDUINO_AVR_MEGA2560)       
+        #define BOARD "Mega 2560"
+    #elif defined(ARDUINO_AVR_MICRO)       
+        #define BOARD "Micro"
+    #elif defined(ARDUINO_AVR_MINI)       
+        #define BOARD "Mini"
+    #elif defined(ARDUINO_AVR_NANO)       
+        #define BOARD "Nano"
+    #elif defined(ARDUINO_AVR_NG)       
+        #define BOARD "NG"
+    #elif defined(ARDUINO_AVR_PRO)       
+        #define BOARD "Pro"
+    #elif defined(ARDUINO_AVR_ROBOT_CONTROL)       
+        #define BOARD "Robot Ctrl"
+    #elif defined(ARDUINO_AVR_ROBOT_MOTOR)       
+        #define BOARD "Robot Motor"
+    #elif defined(ARDUINO_AVR_UNO)       
+        #define BOARD "Uno"
+    #elif defined(ARDUINO_AVR_YUN)       
+        #define BOARD "Yun"
+
+    // These boards must be installed separately:
+    #elif defined(ARDUINO_SAM_DUE)       
+        #define BOARD "Due"
+    #elif defined(ARDUINO_SAMD_ZERO)       
+        #define BOARD "Zero"
+    #elif defined(ARDUINO_ARC32_TOOLS)       
+        #define BOARD "101"
+    #else
+       #error "Unknown board"
+    #endif
+
+#endif
+
 #include <Adafruit_ADS1015.h>
 
 // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
@@ -16,22 +96,53 @@
 
 #define INTERRUPT_PERIOD_MICROSECONDS 500
 
-#define ENCODER1_STEP -10
-#define ENCODER1_CHA_PIN A0
-#define ENCODER1_CHB_PIN A1
-#define ENCODER1_BTN_PIN A2
+#define ENCODER1_STEP 10
 
-#define ENCODER1_LED_PIN 8
-#define CEILING_LIGHT 3
+#if defined(ARDUINO_AVR_NANO)
+  #define ENCODER1_CHA_PIN A0
+  #define ENCODER1_CHB_PIN A1
+  #define ENCODER1_BTN_PIN A2
+  
+//  #define ENCODER1_LED_PIN 8
+//  #define CEILING_LIGHT 3
+  #define RESERVED_OUTPUT_2 5
+  #define RESERVED_OUTPUT_3 6
+  #define RESERVED_OUTPUT_4 9
+  #define RESERVED_OUTPUT_5 4
+  #define RESERVED_OUTPUT_6 7
+  #define RESERVED_OUTPUT_7 3
+  
+#elif defined(ARDUINO_AVR_LEONARDO)
+  #define INDICATOR_LED 13
+  
+  #define ENCODER1_CHA_PIN 9 /* Requires interrupt */
+  #define ENCODER1_CHB_PIN 8 /* Requires interrupt */
+  #define ENCODER1_BTN_PIN 12
+  #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
+
+  #define CEILING_LIGHT 10
+  
+//  #define OUTPUT0 CEILING_LIGHT
+//  #define OUTPUT1 ENCODER1_LED_PIN
+  #define RESERVED_OUTPUT_2 11
+  #define RESERVED_OUTPUT_3 A0 /* NO HARDWARE PWM */
+  #define RESERVED_OUTPUT_4 A1 /* NO HARDWARE PWM */
+  #define RESERVED_OUTPUT_5 A2 /* NO HARDWARE PWM */
+  #define RESERVED_OUTPUT_6 A3 /* NO HARDWARE PWM */
+  #define RESERVED_OUTPUT_7 A4 /* NO HARDWARE PWM */
+
+#else
+  #error "CODE STUB"
+#endif
 
 #define OUTPUT0 CEILING_LIGHT
-#define OUTPUT1 5
-#define OUTPUT2 6
-#define OUTPUT3 9
-#define OUTPUT4 4 /* NO HARDWARE PWM */
-#define OUTPUT5 7 /* NO HARDWARE PWM */
-#define OUTPUT6 ENCODER1_LED_PIN /* LOGIC LEVEL LOW CURRENT */
-#define OUTPUT7 3 /* PLACEHOLDER - TO BE REPLACED */ /* LOGIC LEVEL LOW CURRENT */
+#define OUTPUT1 ENCODER1_LED_PIN
+#define OUTPUT2 RESERVED_OUTPUT_2
+#define OUTPUT3 RESERVED_OUTPUT_3
+#define OUTPUT4 RESERVED_OUTPUT_4
+#define OUTPUT5 RESERVED_OUTPUT_5
+#define OUTPUT6 RESERVED_OUTPUT_6
+#define OUTPUT7 RESERVED_OUTPUT_7
 
 // Fatal error flash codes - make sure none of these are ambiguous when flashing as two hex nybbles
 // 0x0? is acceptable but not 0x?0
