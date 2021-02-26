@@ -1,0 +1,7 @@
+Compile:
+
+    > arduino-cli compile -b arduino:avr:leonardo
+
+Upload to board
+
+    > arduino-cli upload -b arduino:avr:leonardo -p /dev/ttyACM0

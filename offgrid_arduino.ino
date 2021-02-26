@@ -1,9 +1,11 @@
 #include <avr/wdt.h>
 #include <EEPROM.h>
 #include <TimerOne.h>
-#include <Adafruit_ADS1015.h>
-#include <CircularBuffer.h>
-#include <rotary.h> // https://github.com/brianlow/Rotary.git
+//#include <Adafruit_ADS1015.h>
+//#include <CircularBuffer.h>
+
+// KEEP THIS UPPERCASE AND FIX OTHER PROBLEMS
+#include <Rotary.h> // https://github.com/brianlow/Rotary.git
 
 //#include <SPI.h>
 #include <Button.h> // https://github.com/jimmybyrum/arduino/git
@@ -110,9 +112,9 @@ int encoder1_value_prev = 0;
 bool encoder1_button_value = 0;
 
 // ADC Modules
-Adafruit_ADS1115 ads0(0x48);
-Adafruit_ADS1115 ads1(0x49);
-Adafruit_ADS1115 ads2(0x4A);
+//Adafruit_ADS1115 ads0(0x48);
+//Adafruit_ADS1115 ads1(0x49);
+//Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
 struct BMConst battery_monitor_const[2];
@@ -146,13 +148,13 @@ void setup() {
     SetPWM(i, 0);
   }
 
-  ads0.setGain(ADS1115_0_GAIN);
-  ads1.setGain(ADS1115_1_GAIN);
-  ads2.setGain(ADS1115_2_GAIN);
+//  ads0.setGain(ADS1115_0_GAIN);
+//  ads1.setGain(ADS1115_1_GAIN);
+//  ads2.setGain(ADS1115_2_GAIN);
 
-  ads0.begin();
-  ads1.begin();
-  ads2.begin();
+//  ads0.begin();
+//  ads1.begin();
+//  ads2.begin();
 
   Timer1.start();
   interrupts();
@@ -403,6 +405,7 @@ void ReadADCs(void) {
     adc_count[token]++;
   }
 
+/*
   switch(token) {
     case ADC_0_01: adc_sum[token] += ads0.readADC_Differential_0_1(); break;
     case ADC_0_23: adc_sum[token] += ads0.readADC_Differential_2_3(); break;
@@ -414,6 +417,7 @@ void ReadADCs(void) {
     case ADC_2_2: adc_sum[token] += ads2.readADC_SingleEnded(2); break;
     case ADC_2_3: adc_sum[token] += ads2.readADC_SingleEnded(3); break;
   }
+*/
 
   if (token >= 7) {
     token = 0;

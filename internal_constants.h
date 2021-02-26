@@ -81,7 +81,7 @@
 
 #endif
 
-#include <Adafruit_ADS1015.h>
+//#include <Adafruit_ADS1015.h>
 
 // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
 // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
@@ -90,9 +90,9 @@
 // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
 // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
 
-#define ADS1115_0_GAIN GAIN_SIXTEEN
-#define ADS1115_1_GAIN GAIN_SIXTEEN
-#define ADS1115_2_GAIN GAIN_ONE
+//#define ADS1115_0_GAIN GAIN_SIXTEEN
+//#define ADS1115_1_GAIN GAIN_SIXTEEN
+//#define ADS1115_2_GAIN GAIN_ONE
 
 #define INTERRUPT_PERIOD_MICROSECONDS 500
 
