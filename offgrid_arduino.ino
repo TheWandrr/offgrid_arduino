@@ -3,7 +3,7 @@
 #include <TimerOne.h>
 #include <Adafruit_ADS1015.h>
 #include <CircularBuffer.h>
-#include <Rotary.h> // https://github.com/brianlow/Rotary.git
+#include <rotary.h> // https://github.com/brianlow/Rotary.git
 
 //#include <SPI.h>
 #include <Button.h> // https://github.com/jimmybyrum/arduino/git
