@@ -1185,7 +1185,7 @@ uint16_t readSPI16(uint8_t addr, uint8_t reg) {
   Wire.beginTransmission(addr);
   Wire.write(reg);
   Wire.endTransmission();
-  Wire.requestFrom(addr,2);
+  Wire.requestFrom(addr,(uint8_t)2);
   if(Wire.available()){
     MSByte = Wire.read();
     LSByte = Wire.read();
