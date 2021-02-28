@@ -74,7 +74,9 @@ volatile bool broadcast_flag = 0;
 
 void setup() {
 
-  noInterrupts();
+  Serial.begin(115200);
+
+  while (!Serial); // This appears to be needed for native USB ports (
 
   // Safety code to start with disabled watchdog timer
   MCUSR &= ~(1 << WDRF);
@@ -91,40 +93,19 @@ void setup() {
   }
 
   Timer1.start();
-  interrupts();
-
-  delay(500);
-
-  Serial.begin(115200);
-
   //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
-
-  serialize(MSG_POWER_ON, "");
 
   initEncoders();
   initBatteryMonitors();
 
+  interrupts();
+
+  serialize(MSG_POWER_ON, "");
   returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 }
 
-void setupWatchdogTimer(void) {
-  // Configure the watchdog timer for system reset and interrupt, 8 second timeout.
-  noInterrupts();
-  wdt_reset();
-
-  MCUSR = 0;
-  _WD_CONTROL_REG = (1 << _WD_CHANGE_BIT) | (1 << WDE); // Begin timed sequence - WDCE (change enable) resets in 4 cycles
-  //_WD_CONTROL_REG = (1 << WDIE) | (1 << WDE) | (1 << WDP3) | (1 << WDP0);  // Interrupt & system reset, 8 second timeout
-  //_WD_CONTROL_REG = (1 << WDE) | (1 << WDP3) | (1 << WDP0);  // System reset, 8 second timeout
-  _WD_CONTROL_REG = (0 << WDE) | (1 << WDP3) | (1 << WDP0);  // Disable WDT
-
-  interrupts();
-}
-
-bool toggletemp = false;
-
 void loop() {
-  processSerialReceive();
+//  processSerialReceive();
   processEncoders();
   //processPWMEnable();
 
@@ -151,14 +132,6 @@ void loop() {
   if (quarter_second_flag) {
     quarter_second_flag = false;
 
-// DEBUG //
-    if(toggletemp) {
-        SetPWM(1, 100);
-    } else {
-        SetPWM(1, 0);
-    }
-// DEBUG //
-
   }
 
   if (one_second_flag) {
@@ -167,6 +140,20 @@ void loop() {
     processBatteryMonitors();
   }
 
+}
+
+void setupWatchdogTimer(void) {
+  // Configure the watchdog timer for system reset and interrupt, 8 second timeout.
+  noInterrupts();
+  wdt_reset();
+
+  MCUSR = 0;
+  _WD_CONTROL_REG = (1 << _WD_CHANGE_BIT) | (1 << WDE); // Begin timed sequence - WDCE (change enable) resets in 4 cycles
+  //_WD_CONTROL_REG = (1 << WDIE) | (1 << WDE) | (1 << WDP3) | (1 << WDP0);  // Interrupt & system reset, 8 second timeout
+  //_WD_CONTROL_REG = (1 << WDE) | (1 << WDP3) | (1 << WDP0);  // System reset, 8 second timeout
+  _WD_CONTROL_REG = (0 << WDE) | (1 << WDP3) | (1 << WDP0);  // Disable WDT
+
+  interrupts();
 }
 
 void initEncoders(void) {
@@ -186,7 +173,7 @@ void initEncoders(void) {
 void initBatteryMonitors(void) {
 
   // Set up INA226 shunt monitor modules
-  for (uint8_t i = 0; i < sizeof(ina226); i++) {
+  for (uint8_t i = 0; i < sizeof(ina226_addr); i++) {
     ina226[i].begin(ina226_addr[i]);
     ina226[i].configure(INA226_AVERAGES_16, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US, INA226_MODE_SHUNT_BUS_CONT);
 
