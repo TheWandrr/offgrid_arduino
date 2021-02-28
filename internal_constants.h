@@ -81,7 +81,7 @@
 
 #endif
 
-#include <Adafruit_ADS1015.h>
+//#include <Adafruit_ADS1015.h>
 
 // ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
 // ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
@@ -90,21 +90,26 @@
 // ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
 // ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
 
-#define ADS1115_0_GAIN GAIN_SIXTEEN
-#define ADS1115_1_GAIN GAIN_SIXTEEN
-#define ADS1115_2_GAIN GAIN_ONE
+//#define ADS1115_0_GAIN GAIN_SIXTEEN
+//#define ADS1115_1_GAIN GAIN_SIXTEEN
+//#define ADS1115_2_GAIN GAIN_ONE
+
+#define INA226_0_ADDR 0x40
+#define INA226_1_ADDR 0x41
 
 #define INTERRUPT_PERIOD_MICROSECONDS 500
 
 #define ENCODER1_STEP 10
 
 #if defined(ARDUINO_AVR_NANO)
+  #define INDICATOR_LED 13
+
   #define ENCODER1_CHA_PIN A0
   #define ENCODER1_CHB_PIN A1
   #define ENCODER1_BTN_PIN A2
   
-//  #define ENCODER1_LED_PIN 8
-//  #define CEILING_LIGHT 3
+  #define ENCODER1_LED_PIN 8
+  #define CEILING_LIGHT 3
   #define RESERVED_OUTPUT_2 5
   #define RESERVED_OUTPUT_3 6
   #define RESERVED_OUTPUT_4 9
@@ -118,12 +123,11 @@
   #define ENCODER1_CHA_PIN 9 /* Requires interrupt */
   #define ENCODER1_CHB_PIN 8 /* Requires interrupt */
   #define ENCODER1_BTN_PIN 12
-  #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
 
   #define CEILING_LIGHT 10
   
-//  #define OUTPUT0 CEILING_LIGHT
-//  #define OUTPUT1 ENCODER1_LED_PIN
+  #define CEILING_LIGHT 10
+  #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
   #define RESERVED_OUTPUT_2 11
   #define RESERVED_OUTPUT_3 A0 /* NO HARDWARE PWM */
   #define RESERVED_OUTPUT_4 A1 /* NO HARDWARE PWM */

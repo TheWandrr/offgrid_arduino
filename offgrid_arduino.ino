@@ -1,7 +1,7 @@
 #include <avr/wdt.h>
 #include <EEPROM.h>
 #include <TimerOne.h>
-#include <Adafruit_ADS1015.h>
+//#include <Adafruit_ADS1015.h>
 #include <CircularBuffer.h>
 #include <rotary.h> // https://github.com/brianlow/Rotary.git
 
@@ -10,7 +10,8 @@
 //#include <SDHT.h>
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
-//#include <wire.h>
+#include <Wire.h>
+#include <INA226.h>
 
 #include "shared_constants.h"
 #include "internal_constants.h"
@@ -110,16 +111,19 @@ int encoder1_value_prev = 0;
 bool encoder1_button_value = 0;
 
 // ADC Modules
-Adafruit_ADS1115 ads0(0x48);
-Adafruit_ADS1115 ads1(0x49);
-Adafruit_ADS1115 ads2(0x4A);
+//Adafruit_ADS1115 ads0(0x48);
+//Adafruit_ADS1115 ads1(0x49);
+//Adafruit_ADS1115 ads2(0x4A);
 //Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
 
-struct BMConst battery_monitor_const[2];
-struct BMVar battery_monitor_var[2];
+// Battery Monitoring (INA226 modules)
+const byte ina226_addr[] = {0x40, 0x41};
+INA226 ina226[sizeof(ina226_addr)];
+struct BMConst battery_monitor_const[sizeof(ina226_addr)];
+struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 
-int32_t adc_sum[8] = {0};
-int8_t adc_count[8] = {0};
+//int32_t adc_sum[8] = {0};
+//int8_t adc_count[8] = {0};
 
 bool inhibit_broadcast = false;
 uint32_t broadcast_period_ms = 1000;
@@ -146,13 +150,13 @@ void setup() {
     SetPWM(i, 0);
   }
 
-  ads0.setGain(ADS1115_0_GAIN);
-  ads1.setGain(ADS1115_1_GAIN);
-  ads2.setGain(ADS1115_2_GAIN);
+//  ads0.setGain(ADS1115_0_GAIN);
+//  ads1.setGain(ADS1115_1_GAIN);
+//  ads2.setGain(ADS1115_2_GAIN);
 
-  ads0.begin();
-  ads1.begin();
-  ads2.begin();
+//  ads0.begin();
+//  ads1.begin();
+//  ads2.begin();
 
   Timer1.start();
   interrupts();
@@ -165,7 +169,7 @@ void setup() {
   serialize(MSG_POWER_ON, "");
 
   initEncoders();
-  initBatteryMonitor();
+  initBatteryMonitors();
 
   returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 }
@@ -199,7 +203,7 @@ void loop() {
 
     if(!inhibit_broadcast) {
       broadcastPWMValues();
-      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
+//      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
       broadcastBatteryMonitor();
     }
   }
@@ -208,7 +212,7 @@ void loop() {
     ten_millisecond_flag = false;
 
     processEncoderLEDState();
-    ReadADCs(); // TODO: This takes longer than it needs to and should be set up for continuous conversion.
+//    ReadADCs(); // TODO: This takes longer than it needs to and should be set up for continuous conversion.
   }
 
   if (quarter_second_flag) {
@@ -219,7 +223,7 @@ void loop() {
   if (one_second_flag) {
     one_second_flag = false;
 
-    processBatteryMonitor();
+    processBatteryMonitors();
   }
 
 }
@@ -238,7 +242,17 @@ void initEncoders(void) {
 #endif 
 }
 
-void initBatteryMonitor(void) {
+void initBatteryMonitors(void) {
+
+  // Set up INA226 shunt monitor modules
+  for (uint8_t i = 0; i < sizeof(ina226); i++) {
+    ina226[i].begin(ina226_addr[i]);
+    ina226[i].configure(INA226_AVERAGES_16, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US, INA226_MODE_SHUNT_BUS_CONT);
+    
+    // No public functions in the library to set this directly
+    writeSPI16(ina226_addr[i], INA226_REG_CALIBRATION, 0x07F3); // TODO: Figure out.  Obtained by trial and error
+  }
+
   // First time requires that the EEPROM be pre-programmed.  See offgrid_init_eeprom.ino
   EEPROM.get(0, battery_monitor_const); // Copy semi-constants from EEPROM to battery monitor structures
 
@@ -274,15 +288,11 @@ void processEncoderLEDState(void) {
   }
 }
 
-void processBatteryMonitor(void) {  
-  // TODO: Consider a way to process all battery monitor instances consistently in a loop
-  battery_monitor_var[0].amps = ((float)adc_sum[0] / (float)adc_count[0]) * battery_monitor_const[0].amps_multiplier;
-  battery_monitor_var[0].volts = ((float)adc_sum[4] / (float)adc_count[4]) * battery_monitor_const[0].volts_multiplier;
-//  battery_monitor_var[1].amps = (float)(adc_sum[2] / adc_count[2]) * battery_monitor_const[1].amps_multiplier;
-//  battery_monitor_var[1].volts = (float)(adc_sum[5] / adc_count[5]) * battery_monitor_const[1].volts_multiplier;
-
+void processBatteryMonitors(void) {  
   // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+    battery_monitor_var[i].volts = readSPI16(ina226_addr[i], INA226_REG_BUSVOLTAGE) * battery_monitor_const[0].volts_multiplier;
+    battery_monitor_var[i].amps = readSPI16(ina226_addr[i], INA226_REG_SHUNTVOLTAGE) * battery_monitor_const[0].amps_multiplier;
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
     battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
@@ -380,49 +390,49 @@ void broadcastBatteryMonitor(void) {
 }
 
  /* TODO: TO BE DEPRECATED! */
-void broadcastADCValues(void) {
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB0, (uint16_t)GetMemoryMap(0xB0)); // charger_input_current
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB1, (uint16_t)GetMemoryMap(0xB1)); // load_center_current
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB2, (uint16_t)GetMemoryMap(0xB2)); // vehicle_input_current
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB3, (uint16_t)GetMemoryMap(0xB3)); // inverter_current
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB4, (uint16_t)GetMemoryMap(0xB4)); // house_batt_voltage
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB5, (uint16_t)GetMemoryMap(0xB5)); // vehicle_batt_voltage
-}
+//void broadcastADCValues(void) {
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB0, (uint16_t)GetMemoryMap(0xB0)); // charger_input_current
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB1, (uint16_t)GetMemoryMap(0xB1)); // load_center_current
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB2, (uint16_t)GetMemoryMap(0xB2)); // vehicle_input_current
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB3, (uint16_t)GetMemoryMap(0xB3)); // inverter_current
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB4, (uint16_t)GetMemoryMap(0xB4)); // house_batt_voltage
+//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB5, (uint16_t)GetMemoryMap(0xB5)); // vehicle_batt_voltage
+//}
 
 // @@@TODO: Consider a weighted average, maybe based on the difference
 // between current sample and new sample.  If there's a large difference
 // then the sample is given significantly more weight in the average.
-unsigned int token = 0;
-void ReadADCs(void) {
-  const int max_count = 12; // sampled at 80ms, (10ms, 1 in 8 times) this gives an averaging window of ~1s
-
-  if (adc_count[token] >= max_count) {
-    adc_sum[token] -= ( adc_sum[token] / adc_count[token] );
-  }
-  else {
-    adc_count[token]++;
-  }
-
-  switch(token) {
-    case ADC_0_01: adc_sum[token] += ads0.readADC_Differential_0_1(); break;
-    case ADC_0_23: adc_sum[token] += ads0.readADC_Differential_2_3(); break;
-    case ADC_1_01: adc_sum[token] += ads1.readADC_Differential_0_1(); break;
-    case ADC_1_23: adc_sum[token] += ads1.readADC_Differential_2_3(); break;
-    
-    case ADC_2_0: adc_sum[token] += ads2.readADC_SingleEnded(0); break;
-    case ADC_2_1: adc_sum[token] += ads2.readADC_SingleEnded(1); break;
-    case ADC_2_2: adc_sum[token] += ads2.readADC_SingleEnded(2); break;
-    case ADC_2_3: adc_sum[token] += ads2.readADC_SingleEnded(3); break;
-  }
-
-  if (token >= 7) {
-    token = 0;
-  }
-  else {
-    token++;
-  }
-
-}
+//unsigned int token = 0;
+//void ReadADCs(void) {
+//  const int max_count = 12; // sampled at 80ms, (10ms, 1 in 8 times) this gives an averaging window of ~1s
+//
+//  if (adc_count[token] >= max_count) {
+//    adc_sum[token] -= ( adc_sum[token] / adc_count[token] );
+//  }
+//  else {
+//    adc_count[token]++;
+//  }
+//
+//  switch(token) {
+//    case ADC_0_01: adc_sum[token] += ads0.readADC_Differential_0_1(); break;
+//    case ADC_0_23: adc_sum[token] += ads0.readADC_Differential_2_3(); break;
+//    case ADC_1_01: adc_sum[token] += ads1.readADC_Differential_0_1(); break;
+//    case ADC_1_23: adc_sum[token] += ads1.readADC_Differential_2_3(); break;
+//    
+//    case ADC_2_0: adc_sum[token] += ads2.readADC_SingleEnded(0); break;
+//    case ADC_2_1: adc_sum[token] += ads2.readADC_SingleEnded(1); break;
+//    case ADC_2_2: adc_sum[token] += ads2.readADC_SingleEnded(2); break;
+//    case ADC_2_3: adc_sum[token] += ads2.readADC_SingleEnded(3); break;
+//  }
+//
+//  if (token >= 7) {
+//    token = 0;
+//  }
+//  else {
+//    token++;
+//  }
+//
+//}
 
 // TODO: See about improving this to avoid using floating point
 uint8_t cie1931_percent_to_byte(uint8_t percent) {
@@ -558,16 +568,16 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       
       return true;
 
-    // ADC read only inputs
-    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
-      return false;
+//    // ADC read only inputs
+//    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
+//      return false;
   }
 
   return false;
@@ -612,15 +622,15 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
 
-    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
-    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
-      return (uint16_t)(adc_sum[address & 0x0007] / adc_count[address & 0x0007]);
+//    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
+//    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
+//      return (uint16_t)(adc_sum[address & 0x0007] / adc_count[address & 0x0007]);
   }
 
   return 0;
@@ -1155,6 +1165,31 @@ void processSerialReceive(void) {
 
     }
   }
+}
+
+void writeSPI16(uint8_t addr, uint8_t reg, uint16_t val) {
+  Wire.beginTransmission(addr);
+  uint8_t lVal = val & 255;
+  uint8_t hVal = val >> 8;
+  Wire.write(reg);
+  Wire.write(hVal);
+  Wire.write(lVal);
+  Wire.endTransmission();
+}
+  
+uint16_t readSPI16(uint8_t addr, uint8_t reg) {
+  uint8_t MSByte = 0, LSByte = 0;
+  uint16_t regValue = 0;
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  Wire.endTransmission();
+  Wire.requestFrom(addr,2);
+  if(Wire.available()){
+    MSByte = Wire.read();
+    LSByte = Wire.read();
+  }
+  regValue = (MSByte<<8) + LSByte;
+  return regValue;
 }
 
 ////////////////////////// INTERRUPTS ///////////////////////////////
