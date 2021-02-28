@@ -2,8 +2,10 @@
 #include <EEPROM.h>
 #include <TimerOne.h>
 //#include <Adafruit_ADS1015.h>
-#include <CircularBuffer.h>
-#include <rotary.h> // https://github.com/brianlow/Rotary.git
+//#include <CircularBuffer.h>
+
+// KEEP THIS UPPERCASE AND FIX OTHER PROBLEMS
+#include <Rotary.h> // https://github.com/brianlow/Rotary.git
 
 //#include <SPI.h>
 #include <Button.h> // https://github.com/jimmybyrum/arduino/git
