@@ -20,58 +20,6 @@
 
 // See avr/iom328p.h for register & bit definitions
 
-/*
-    ARDUINO PRO MINI
-    +------------------------------------------------+
-    |   [ 1] D1/PD1/TXD                   RAW {24}   |
-    |   [ 2] D0/PD0/RXD                   GND {23}   |
-    |   [ 3] RST/PC6/PCINT14  RST/PC6/PCINT14 {22}   |
-    |   [ 4] GND                          VCC {21}   |
-    |  *[ 5] D2/PD2/INT0           PC3/A3/D17 {20}   |
-    |  *[ 6] D3/PD3/INT1/PWM       PC2/A2/D16 {19}   |
-    |  *[ 7] D4/PD4                PC1/A1/D15 {18}   |
-    |  *[ 8] D5/PD5/PWM            PC0/A0/D14 {17}   |
-    |  *[ 9] D6/PD6/PWM           SCK/PB5/D13 {16}*  |
-    |  *[10] D7/PD7              MISO/PB4/D12 {15}*  |
-    |   [11] D8/PB0          PWM/MOSI/PB3/D11 {14}*  |
-    |  *[12] D9/PB1/PWM        PWM/SS/PB2/D10 {13}*  |
-    |                                                |
-    |   Additional pin headers:                      |
-    |    *A5/D19/PC5/ADC5/SCL/PCINT13                |
-    |    *A4/D18/PC4/ADC4/SDA/PCINT12                |
-    |                                                |
-    |     A7/ADC7                                    |
-    |     A6/ADC6                                    |
-    +------------------------------------------------+
-
-    *** REVIEW THIS AS IT LIKELY CHANGED IN DEVELOPMENT!!!
-
-    Hardware Notes
-
-    D13/SCK
-    D12/MISO
-    D11/MOSI
-    D10/SS
-    D2/INT0 - Interrupt reserved for SPI device
-
-    D3/PWM - OUTPUT0 (Ceiling light)
-    D5/PWM - OUTPUT1
-    D6/PWM - OUTPUT2
-    D9/PWM - OUTPUT3
-    D4 - OUTPUT4
-    D7 - OUTPUT5
-    D8 - OUTPUT6 (Encoder LED)
-    ?? - OUTPUT7
-
-    A5/SCL
-    A4/SDA
-
-    A3 - Rotary Encoder BTN
-    A1 - Rotary Encoder CHA
-    A0 - Rotary Encoder CHB
-
-*/
-
 // Look up table for converting ID to actual output
 const byte output[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7};
 byte output_value[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
@@ -112,20 +60,12 @@ volatile int encoder1_value = 0;
 int encoder1_value_prev = 0;
 bool encoder1_button_value = 0;
 
-// ADC Modules
-//Adafruit_ADS1115 ads0(0x48);
-//Adafruit_ADS1115 ads1(0x49);
-//Adafruit_ADS1115 ads2(0x4A);
-//Adafruit_ADS1115 ads3(0x4B); // Possible to add one more if wanted
-
 // Battery Monitoring (INA226 modules)
-const byte ina226_addr[] = {0x40, 0x41};
+const byte ina226_addr[] = {0x40};
+//const byte ina226_addr[] = {0x40, 0x41};
 INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
 struct BMVar battery_monitor_var[sizeof(ina226_addr)];
-
-//int32_t adc_sum[8] = {0};
-//int8_t adc_count[8] = {0};
 
 bool inhibit_broadcast = false;
 uint32_t broadcast_period_ms = 1000;
@@ -133,8 +73,6 @@ volatile uint32_t broadcast_timer_counter = broadcast_period_ms * (1 / (INTERRUP
 volatile bool broadcast_flag = 0;
 
 void setup() {
-
-  Serial.begin(115200);
 
   noInterrupts();
 
@@ -152,22 +90,15 @@ void setup() {
     SetPWM(i, 0);
   }
 
-//  ads0.setGain(ADS1115_0_GAIN);
-//  ads1.setGain(ADS1115_1_GAIN);
-//  ads2.setGain(ADS1115_2_GAIN);
-
-//  ads0.begin();
-//  ads1.begin();
-//  ads2.begin();
-
   Timer1.start();
   interrupts();
 
+  delay(500);
+
+  Serial.begin(115200);
+
   //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
 
-  //uint8_t last_mcp_eflg=0, last_mcp_rec=0, last_mcp_tec=0, last_rx_queue_count=0, last_rx_queue_count_max=0;
-
-//  serialize(MSG_POWER_ON, "bbbbb", last_mcp_eflg, last_mcp_rec, last_mcp_tec, last_rx_queue_count, last_rx_queue_count_max);
   serialize(MSG_POWER_ON, "");
 
   initEncoders();
@@ -190,6 +121,8 @@ void setupWatchdogTimer(void) {
   interrupts();
 }
 
+bool toggletemp = false;
+
 void loop() {
   processSerialReceive();
   processEncoders();
@@ -205,20 +138,26 @@ void loop() {
 
     if(!inhibit_broadcast) {
       broadcastPWMValues();
-//      broadcastADCValues(); /* TODO: TO BE DEPRECATED! */
-      broadcastBatteryMonitor();
+      broadcastBatteryMonitors();
     }
   }
-  
+
   if (ten_millisecond_flag) {
     ten_millisecond_flag = false;
 
     processEncoderLEDState();
-//    ReadADCs(); // TODO: This takes longer than it needs to and should be set up for continuous conversion.
   }
 
   if (quarter_second_flag) {
     quarter_second_flag = false;
+
+// DEBUG //
+    if(toggletemp) {
+        SetPWM(1, 100);
+    } else {
+        SetPWM(1, 0);
+    }
+// DEBUG //
 
   }
 
@@ -250,7 +189,7 @@ void initBatteryMonitors(void) {
   for (uint8_t i = 0; i < sizeof(ina226); i++) {
     ina226[i].begin(ina226_addr[i]);
     ina226[i].configure(INA226_AVERAGES_16, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US, INA226_MODE_SHUNT_BUS_CONT);
-    
+
     // No public functions in the library to set this directly
     writeSPI16(ina226_addr[i], INA226_REG_CALIBRATION, 0x07F3); // TODO: Figure out.  Obtained by trial and error
   }
@@ -280,17 +219,7 @@ void initBatteryMonitors(void) {
   }
 }
 
-// TODO: This could be used to signal error codes as well
-void processEncoderLEDState(void) {
-  if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 0) {
-    SetPWM(1, 15);
-  }
-  else {
-    SetPWM(1, 0);
-  }
-}
-
-void processBatteryMonitors(void) {  
+void processBatteryMonitors(void) {
   // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
     battery_monitor_var[i].volts = readSPI16(ina226_addr[i], INA226_REG_BUSVOLTAGE) * battery_monitor_const[0].volts_multiplier;
@@ -302,15 +231,15 @@ void processBatteryMonitors(void) {
 //#error "Unfinished code - charge state machine"
 //
 //    switch(battery_monitor_var_charge_state[i]) {
-//      CS_NONE: 
+//      CS_NONE:
 //        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
 //        else if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
 //        break;
 //
-//      CS_CHARGED:        
+//      CS_CHARGED:
 //        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
 //        break;
-//        
+//
 //      CS_CHARGING:
 //        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
 //        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
@@ -319,16 +248,24 @@ void processBatteryMonitors(void) {
 //
 //        // If "sync_pending" is set and timer exceeds 'minutes_charged_detection_time', set all appropriate variables then switch to CHARGED state
 //        break;
-//        
+//
 //      CS_DISCHARGING:
 //        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
 //        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
 //        break;
-//        
+//
 //    }
 
   }
 
+}
+
+void broadcastBatteryMonitors(void) {
+  // All values are decimal point shifted from float!
+  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_VOLTS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
+  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AMPS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
+  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AH_LEFT, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
+  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_SOC, (uint16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
 }
 
 void processEncoders() {
@@ -337,7 +274,7 @@ void processEncoders() {
   if(encoder1_value != encoder1_value_prev) {
     //Serial.println(encoder1_value);
     SetMemoryMap(MEMMAP_PWM_OUTPUT0, encoder1_value);
-    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));      
+    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_PWM_OUTPUT0, (uint8_t)GetMemoryMap(MEMMAP_PWM_OUTPUT0));
 
     encoder1_value_prev = encoder1_value;
   }
@@ -362,6 +299,16 @@ void processEncoders() {
 
 }
 
+// TODO: This could be used to signal error codes as well
+void processEncoderLEDState(void) {
+  if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 0) {
+    SetPWM(1, 15);
+  }
+  else {
+    SetPWM(1, 0);
+  }
+}
+
 void returnAllInterfaces(void) {
   for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
     serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
@@ -379,75 +326,18 @@ bool returnInterface(uint16_t address) {
   serialize(MSG_GET_INTERFACE_ERROR, "i", address); // Not found if we didn't return already
 }
 
-void broadcastPWMValues(void) {
-  serialize(MSG_RETURN_8_8, "bb", (uint8_t)0xA0, (uint8_t)GetMemoryMap(0xA0));
-}
-
-void broadcastBatteryMonitor(void) {
-  // All values are decimal point shifted from float!
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_VOLTS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AMPS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));  
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AH_LEFT, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));  
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_SOC, (uint16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
-}
-
- /* TODO: TO BE DEPRECATED! */
-//void broadcastADCValues(void) {
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB0, (uint16_t)GetMemoryMap(0xB0)); // charger_input_current
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB1, (uint16_t)GetMemoryMap(0xB1)); // load_center_current
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB2, (uint16_t)GetMemoryMap(0xB2)); // vehicle_input_current
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB3, (uint16_t)GetMemoryMap(0xB3)); // inverter_current
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB4, (uint16_t)GetMemoryMap(0xB4)); // house_batt_voltage
-//  serialize(MSG_RETURN_8_16, "bi", (uint8_t)0xB5, (uint16_t)GetMemoryMap(0xB5)); // vehicle_batt_voltage
-//}
-
-// @@@TODO: Consider a weighted average, maybe based on the difference
-// between current sample and new sample.  If there's a large difference
-// then the sample is given significantly more weight in the average.
-//unsigned int token = 0;
-//void ReadADCs(void) {
-//  const int max_count = 12; // sampled at 80ms, (10ms, 1 in 8 times) this gives an averaging window of ~1s
-//
-//  if (adc_count[token] >= max_count) {
-//    adc_sum[token] -= ( adc_sum[token] / adc_count[token] );
-//  }
-//  else {
-//    adc_count[token]++;
-//  }
-//
-//  switch(token) {
-//    case ADC_0_01: adc_sum[token] += ads0.readADC_Differential_0_1(); break;
-//    case ADC_0_23: adc_sum[token] += ads0.readADC_Differential_2_3(); break;
-//    case ADC_1_01: adc_sum[token] += ads1.readADC_Differential_0_1(); break;
-//    case ADC_1_23: adc_sum[token] += ads1.readADC_Differential_2_3(); break;
-//    
-//    case ADC_2_0: adc_sum[token] += ads2.readADC_SingleEnded(0); break;
-//    case ADC_2_1: adc_sum[token] += ads2.readADC_SingleEnded(1); break;
-//    case ADC_2_2: adc_sum[token] += ads2.readADC_SingleEnded(2); break;
-//    case ADC_2_3: adc_sum[token] += ads2.readADC_SingleEnded(3); break;
-//  }
-//
-//  if (token >= 7) {
-//    token = 0;
-//  }
-//  else {
-//    token++;
-//  }
-//
-//}
-
 // TODO: See about improving this to avoid using floating point
 uint8_t cie1931_percent_to_byte(uint8_t percent) {
 //  double L = percent;
   float L = percent;
-  
+
   if (L <= 8) {
       L = L / 902.3;
   }
   else {
     L = pow( ( (L + 16.0) / 116.0 ), 3 );
     }
-  
+
   return (uint8_t)(L * 255);
 }
 
@@ -474,6 +364,10 @@ uint8_t GetPWM(uint8_t output_num) {
   return output_value[output_num];
 }
 
+void broadcastPWMValues(void) {
+  serialize(MSG_RETURN_8_8, "bb", (uint8_t)0xA0, (uint8_t)GetMemoryMap(0xA0));
+}
+
 /*************************************************/
 /* SET VIRTUAL MEMORY MAP                        */
 /*************************************************/
@@ -482,22 +376,20 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 // TODO: Set should be followed by publishing the new data.  Everywhere else this has been done needs removed.
 
   switch (address) {
-    // Switches
     case MEMMAP_SETTING_BROADCAST_PERIOD_MS: // Sets the period between data broadcasts.  0xFFFFFFFF disables until another value is set.  Limited to minimum 100ms period.
       inhibit_broadcast = (data == 0xFFFFFFFF);
       broadcast_period_ms = max(100, data);
       broadcast_timer_counter = broadcast_period_ms * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
       return true;
 
-// TODO: Use this to pre-set the internal SOC.  Both are linked and set the other accordingly!
-    case MEMMAP_BANK0_AH_LEFT: 
+    case MEMMAP_BANK0_AH_LEFT:
       battery_monitor_var[0].amphours_remaining = (int16_t)data / 10.0;
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
       battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;
-      
+
     case MEMMAP_BANK0_SOC:
-      battery_monitor_var[0].amphours_remaining = ( (int16_t)(data) / 100.0 / 100.0 * battery_monitor_const[0].amphours_capacity );      
+      battery_monitor_var[0].amphours_remaining = ( (int16_t)(data) / 100.0 / 100.0 * battery_monitor_const[0].amphours_capacity );
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
       battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;;
@@ -506,51 +398,51 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       battery_monitor_const[0].amps_multiplier = (uint32_t)data * 0.000001;
       EEPROM.put(eeaddr_bank0_amps_multiplier, battery_monitor_const[0].amps_multiplier);
       return true;
-      
+
     case MEMMAP_BANK0_VOLTS_MULTIPLIER:
       battery_monitor_const[0].volts_multiplier = (uint32_t)data * 0.000001;
       EEPROM.put(eeaddr_bank0_volts_multiplier, battery_monitor_const[0].volts_multiplier);
       return true;
-      
+
     case MEMMAP_BANK0_AH_CAPACITY:
       data = max(0.1, data); // must be greater than zero
       battery_monitor_const[0].amphours_capacity = (uint16_t)data *0.1;
       EEPROM.put(eeaddr_bank0_amphours_capacity, battery_monitor_const[0].amphours_capacity);
       return true;
-      
+
     case MEMMAP_BANK0_VOLTS_CHARGED:
       battery_monitor_const[0].volts_charged = (uint16_t)data * 0.001;
       EEPROM.put(eeaddr_bank0_volts_charged, battery_monitor_const[0].volts_charged);
       return true;
-      
+
     case MEMMAP_BANK0_CHRG_DET_TIME:
       data = max(0.1, data); // must be greater than zero
       battery_monitor_const[0].minutes_charged_detection_time = (uint16_t)data * 0.1;
       EEPROM.put(eeaddr_bank0_minutes_charged_detection_time, battery_monitor_const[0].minutes_charged_detection_time);
       return true;
-      
+
     case MEMMAP_BANK0_CURRENT_THRESHOLD:
       battery_monitor_const[0].current_threshold = (uint32_t)data * 0.000001;
       EEPROM.put(eeaddr_bank0_current_threshold, battery_monitor_const[0].current_threshold);
-      return true;      
+      return true;
 
     case MEMMAP_BANK0_TAIL_CURRENT:
       data = max(0.01, data); // must be greater than zero
       battery_monitor_const[0].tail_current_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_tail_current_factor, battery_monitor_const[0].tail_current_factor);
       return true;
-      
+
     case MEMMAP_BANK0_PEUKERT_FACTOR:
       data = max(0.01, data); // must be greater than zero
       battery_monitor_const[0].peukert_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_peukert_factor, battery_monitor_const[0].peukert_factor);
       return true;
-      
+
     case MEMMAP_BANK0_CHRG_EFFICIENCY:
       data = max(0.01, data); // must be greater than zero
       battery_monitor_const[0].charge_efficiency_factor = (uint8_t)data * 0.01;
       EEPROM.put(eeaddr_bank0_charge_efficiency_factor, battery_monitor_const[0].charge_efficiency_factor);
-      return true;      
+      return true;
 
     // TODO: Add another inhibit for replies to SET commands?  For data that doesn't need acknowledged and speed is paramount.
 
@@ -567,19 +459,8 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
       // Other variables linked to outputs - not sure if this is the best way to structure this...
       if( output[address & 0x00000007] == CEILING_LIGHT) { encoder1_value = (uint8_t)data; }
-      
-      return true;
 
-//    // ADC read only inputs
-//    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
-//      return false;
+      return true;
   }
 
   return false;
@@ -608,11 +489,7 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_BANK0_PEUKERT_FACTOR:     return battery_monitor_const[0].peukert_factor * 100;
     case MEMMAP_BANK0_CHRG_EFFICIENCY:    return battery_monitor_const[0].charge_efficiency_factor * 100;
 
-// No second bank to test with!
-//    case MEMMAP_BANK1_VOLTS: return (uint32_t)battery_monitor_var[1].volts; // float
-//    case MEMMAP_BANK1_AMPS: return (uint32_t)battery_monitor_var[1].amps; // float;
-//    case MEMMAP_BANK1_AMPHOURS: return (uint32_t)battery_monitor_var[1].amphours_consumed; // float;
-//    case MEMMAP_BANK1_SOC: return (uint32_t)battery_monitor_var[1].percent_soc; // float;
+    // TODO: Dynamic return of all defined battery bank variables?
 
     case MEMMAP_PWM_OUTPUT0:
     case MEMMAP_PWM_OUTPUT1:
@@ -624,15 +501,6 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
 
-//    case MEMMAP_ADC_0_01: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_0_23: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_1_01: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_1_23: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_0: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_1: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_2: // TODO: TO BE DEPRECATED!
-//    case MEMMAP_ADC_2_3: // TODO: TO BE DEPRECATED!
-//      return (uint16_t)(adc_sum[address & 0x0007] / adc_count[address & 0x0007]);
   }
 
   return 0;
@@ -670,7 +538,7 @@ byte CRC8(const byte *data, byte len) {
 //    T: signed 24-bit whole number
 //    l: unsigned 32-bit whole number
 //    L: signed 32-bit whole number
-//    S: pointer to string (const __FlashStringHelper *) 
+//    S: pointer to string (const __FlashStringHelper *)
 //    s: pointer to string (const char *)
 
 // TODO: Returns false on error - unused?
@@ -685,17 +553,17 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   i = 0;
   count = 0;
   value = 0;
- 
+
   while(i < strlen(fmt)) {
-    
+
     if(!isspace(fmt[i])) {
       count += (fmt[i] - (uint8_t)('0'));
     }
-      
+
     if (count > 255) {
       return false; // Fail on message with a payload size greater than 256
     }
-    
+
     i++;
   }
 
@@ -719,7 +587,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
     }
 
     //DEBUG//Serial.print("'"); Serial.print(*fmt); Serial.print("'");
-    
+
       switch(*fmt) {
 
 //        case 'd':
@@ -744,19 +612,19 @@ bool serialize(uint16_t address, const char *fmt, ...) {
         case 't':
           value = va_arg(args, uint32_t);
         break;
-  
+
         case 'T':
           value = va_arg(args, int32_t);
         break;
-  
+
         case 'i':
           value = va_arg(args, uint16_t);
         break;
-        
+
         case 'I':
           value = va_arg(args, int16_t);
         break;
-        
+
         case 'b':
           value = va_arg(args, uint16_t);
         break;
@@ -768,51 +636,51 @@ bool serialize(uint16_t address, const char *fmt, ...) {
         case 'S':
           p = (const char *)va_arg(args, const __FlashStringHelper * );
         break;
-        
+
         case 's':
           p = va_arg(args, const char * );
         break;
       }
 
     //DEBUG//Serial.print("<"); Serial.print((uint32_t)value, HEX); Serial.println(">");
-  
+
     switch(*fmt) {
-//      case 'd': 
+//      case 'd':
 //        Serial.print( (unsigned uint8_t)(value >> 56), HEX );
 //        Serial.print( (unsigned uint8_t)(value >> 48), HEX );
 //        Serial.print( (unsigned uint8_t)(value >> 40), HEX );
 //        Serial.print( (unsigned uint8_t)(value >> 32), HEX );
 //        // FALL THROUGH
-//      case 'f': 
+//      case 'f':
 
       // TODO: This has a lot of potential for optimization, but it works for now and we aren't running out of space or time.
-      case 'l': 
+      case 'l':
       case 'L':
         Serial.print( (unsigned uint8_t)(value >> 28 ) & 0x0F, HEX ); // Print by nybble because HEX doesn't output leading '0'
         Serial.print( (unsigned uint8_t)(value >> 24 ) & 0x0F, HEX );
         // FALL THROUGH
-      case 't': 
-      case 'T': 
+      case 't':
+      case 'T':
         Serial.print( (unsigned uint8_t)(value >> 20 ) & 0x0F, HEX );
         Serial.print( (unsigned uint8_t)(value >> 16 ) & 0x0F, HEX );
         // FALL THROUGH
-      case 'i': 
-      case 'I': 
+      case 'i':
+      case 'I':
         Serial.print( (unsigned uint8_t)(value >> 12 ) & 0x0F, HEX );
         Serial.print( (unsigned uint8_t)(value >> 8  ) & 0x0F, HEX );
         // FALL THROUGH
-      case 'b': 
-      case 'B': 
+      case 'b':
+      case 'B':
         Serial.print( (unsigned uint8_t)(value >> 4  ) & 0x0F, HEX );
         Serial.print( (unsigned uint8_t)(value >> 0  ) & 0x0F, HEX );
-      break;      
+      break;
 
       case 'S':
         // TODO: Strip out characters from the string that will cause problems (unescaped?, comma, colon?)
         Serial.write('"'); Serial.print( (const __FlashStringHelper *) p ); Serial.write('"');
       break;
 
-      case 's': 
+      case 's':
         // TODO: Strip out characters from the string that will cause problems (unescaped?, comma, colon?)
         Serial.write('"'); Serial.print(*p); Serial.write('"');
       break;
@@ -824,7 +692,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
     if (*fmt != '\0') {
       Serial.print(',');
     }
-    
+
   }
   va_end(args);
 
@@ -859,7 +727,7 @@ unsigned int asciiHexToInt(char ch) {
       default: num = 0;
     }
   }
-  
+
   return num;
 }
 
@@ -911,7 +779,7 @@ void parse_message(char *msg_buf) {
   //   ... followed by a comma-separated list of ASCII-HEX or STRING values of variable length
   //   ... string values have an additional marker character pre-pended TBD
 
-  //DEBUG//Serial.print("\""); Serial.print(msg_buf); Serial.println("\""); 
+  //DEBUG//Serial.print("\""); Serial.print(msg_buf); Serial.println("\"");
 
   //consumeWhitespace(&p); // TODO: Not working
 
@@ -930,7 +798,7 @@ void parse_message(char *msg_buf) {
       invalid_message = true;
       break;
     }
-    
+
     //while ( (*p != '\0') && (*p != ':') && isxdigit(*p) ) {
     while ( isxdigit(*p) ) {
       address <<= 4;
@@ -941,7 +809,7 @@ void parse_message(char *msg_buf) {
     }
 
     //DEBUG//Serial.print('['); Serial.print(address, HEX); Serial.print(']');
-    
+
     if (count > 4) {
       // TODO: ERROR - address must maximum 4 ASCII-HEX characters
       invalid_message = true;
@@ -955,7 +823,7 @@ void parse_message(char *msg_buf) {
       // Get list following colon
       arg_count = 0;
       do {
-        if(isxdigit(*p)) {          
+        if(isxdigit(*p)) {
           // Get ascii-hex digits up to comma or end of string
           count = 0;
           value_buffer = 0;
@@ -1030,7 +898,7 @@ void parse_message(char *msg_buf) {
     // If no errors were signalled from above, pack everything up and/or execute whatever based on the parsed message
     //DEBUG//Serial.println("  <-- VALID");
 
-    // v v v v v v v v v v v   Serial Message Processing   v v v v v v v v v v v 
+    // v v v v v v v v v v v   Serial Message Processing   v v v v v v v v v v v
 
     switch(address) {
 
@@ -1049,7 +917,7 @@ void parse_message(char *msg_buf) {
           else {
             serialize(MSG_GET_SET_ERROR, "b", (uint8_t)arg[0]);
           }
-          
+
         }
         break;
 
@@ -1115,9 +983,9 @@ void parse_message(char *msg_buf) {
           }
         break;
     }
-        
+
     // ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^  (Serial Message Processing)  ^ ^ ^ ^ ^ ^ ^ ^ ^ ^ ^
-    
+
   }
   else {
     //DEBUG//Serial.println("  <-- INVALID");
@@ -1130,7 +998,7 @@ void processSerialReceive(void) {
   static char message_buffer[32] = {0}; // KEEP INCOMING MESSAGES SMALL!
 
   char c;
-    
+
   if(Serial.available()) {
     switch(receive_state) {
       case GET_STX:
@@ -1140,10 +1008,10 @@ void processSerialReceive(void) {
           receive_state = GET_DATA;
         }
       break;
-  
+
       case GET_DATA:
         c = Serial.read();
-  
+
         if( isprint(c) ) {
           // Valid data, save/buffer it for later
           ////Serial.print(c);
@@ -1157,10 +1025,10 @@ void processSerialReceive(void) {
         else if( c == '\x02' ) {
           // ERROR - expected ETX before STX
           ////Serial.print("   <<<   MISSING ETX\r\n<RECOVER-STX>");
-  
+
           // TODO: Clear any buffered data
           // TODO: Set things up the same as though we've receiv$
-  
+
           strncpy(message_buffer, "", sizeof(message_buffer));
         }
       break;
@@ -1178,7 +1046,7 @@ void writeSPI16(uint8_t addr, uint8_t reg, uint16_t val) {
   Wire.write(lVal);
   Wire.endTransmission();
 }
-  
+
 uint16_t readSPI16(uint8_t addr, uint8_t reg) {
   uint8_t MSByte = 0, LSByte = 0;
   uint16_t regValue = 0;
@@ -1223,7 +1091,7 @@ void handleTimerTick(void) {
     broadcast_flag = true;
     broadcast_timer_counter = broadcast_period_ms * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
   }
-  
+
 }
 
 ISR(WDT_vect) {
@@ -1239,7 +1107,7 @@ ISR(PCINT1_vect) {
 ISR(PCINT0_vect) {
 #else
   #error CODE STUB
-#endif  
+#endif
   uint8_t result;
 ////  struct EncoderData *encoder_data; // Encoder may be used in different modes
 //  int *counter;
@@ -1256,7 +1124,7 @@ ISR(PCINT0_vect) {
 //      // TODO
 //    break;
 //  }
-  
+
   if(result == DIR_CW) {
     ////encoder_data->counter += ENCODER1_STEP;
     //*counter += ENCODER1_STEP;
@@ -1271,5 +1139,5 @@ ISR(PCINT0_vect) {
   ////encoder_data->counter = constrain(encoder_data->counter, encoder_data->min, encoder_data->max);
   //*counter = constrain(*counter, 0, 100);
   encoder1_value = constrain(encoder1_value, 0, 100);
-  
+
 }
