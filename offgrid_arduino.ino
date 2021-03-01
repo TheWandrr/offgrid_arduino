@@ -209,7 +209,7 @@ void processBatteryMonitors(void) {
   // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
     battery_monitor_var[i].volts = readSPI16(ina226_addr[i], INA226_REG_BUSVOLTAGE) * battery_monitor_const[0].volts_multiplier;
-    battery_monitor_var[i].amps = readSPI16(ina226_addr[i], INA226_REG_SHUNTVOLTAGE) * battery_monitor_const[0].amps_multiplier;
+    battery_monitor_var[i].amps = (int16_t)readSPI16(ina226_addr[i], INA226_REG_SHUNTVOLTAGE) * battery_monitor_const[0].amps_multiplier;
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
     battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
