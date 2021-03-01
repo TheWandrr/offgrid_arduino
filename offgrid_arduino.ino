@@ -105,9 +105,8 @@ void setup() {
 }
 
 void loop() {
-//  processSerialReceive();
+  processSerialReceive();
   processEncoders();
-  //processPWMEnable();
 
   if (base_timer_flag) {
     base_timer_flag = false;
