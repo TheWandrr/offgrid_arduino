@@ -136,6 +136,8 @@
   #error "CODE STUB"
 #endif
 
+#define DEBOUNCE_DELAY_MS 50
+
 #define OUTPUT0 CEILING_LIGHT
 #define OUTPUT1 ENCODER1_LED_PIN
 #define OUTPUT2 RESERVED_OUTPUT_2
@@ -183,7 +185,7 @@ struct BMVar {
   float volts; // Battery voltage at last sample
   float amps; // Battery current at last sample
   float amphours_remaining; // Tracks coulombs
-  float percent_soc;
+  float percent_soc; // Redundant? Only use amphours_remaining / amphours_capacity ?
   enum ChargeState charge_state;
 };
 
@@ -256,7 +258,7 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, topic_name_14, topic_unit_14 },
 
   { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, topic_name_15, topic_unit_15 },
-  { MEMMAP_PWM_OUTPUT6,                     1,   0, AM_READWRITE, topic_name_16, topic_unit_16 },
+
 };
 
 #endif /* __INTERNAL_CONSTANTS_H */

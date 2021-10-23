@@ -16,8 +16,10 @@
 #define MSG_RETURN_INTERFACE    0x09 /* Return one message for each available interface when queried by MSG_GET_INTERFACES */
 #define MSG_GET_INTERFACE_ERROR 0x0A
 
-#define MSG_RESERVED_10     0x10 
+#define MSG_RESERVED_10     0x10
 #define MSG_GET_SET_ERROR   0x11 /* Sent by a module in response to a get/set request that could not be satisfied */
+
+/* All data sent as signed values */
 
 #define MSG_SET_8_8         0x12
 #define MSG_GET_8_8         0x13
@@ -27,15 +29,15 @@
 #define MSG_GET_8_16        0x16
 #define MSG_RETURN_8_16     0x17
 
-#define MSG_SET_8_32        0x18
-#define MSG_GET_8_32        0x19
-#define MSG_RETURN_8_32     0x1A
+//#define MSG_SET_8_24        0x18
+//#define MSG_GET_8_24        0x19
+//#define MSG_RETURN_8_24     0x20
 
-#define MSG_RESERVED_1B     0x1B
-#define MSG_RESERVED_1C     0x1C
-#define MSG_RESERVED_1D     0x1D
-#define MSG_RESERVED_1E     0x1E
-#define MSG_RESERVED_1F     0x1F
+#define MSG_SET_8_32        0x21
+#define MSG_GET_8_32        0x22
+#define MSG_RETURN_8_32     0x23
+
+/**** NOTE: Keep these addresses 8-bit until more than that are really needed! ****/
 
 // Variables accessible through serial interface 0x0010 - 0x001F
 #define MEMMAP_SETTING_BROADCAST_PERIOD_MS      0x0010 /* 4 bytes, x1 */
@@ -91,6 +93,14 @@
 //#define MEMMAP_ADC_2_1                          MEMMAP_ADC_BASE + ADC_2_1 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 //#define MEMMAP_ADC_2_2                          MEMMAP_ADC_BASE + ADC_2_2 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 //#define MEMMAP_ADC_2_3                          MEMMAP_ADC_BASE + ADC_2_3 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
+
+#define MEMMAP_DEBUG_BASE           0x00F0
+
+#define MEMMAP_DEBUG0               MEMMAP_DEBUG_BASE + 0 /* 2 bytes, x1 */
+#define MEMMAP_DEBUG1               MEMMAP_DEBUG_BASE + 1 /* 2 bytes, x1 */
+#define MEMMAP_DEBUG2               MEMMAP_DEBUG_BASE + 2 /* 2 bytes, x1 */
+#define MEMMAP_DEBUG3               MEMMAP_DEBUG_BASE + 3 /* 2 bytes, x1 */
+#define MEMMAP_DEBUG4               MEMMAP_DEBUG_BASE + 4 /* 4 bytes, x1000000 */
 
 enum InterfaceAccessMask {
   AM_NONE =       0b00000000,

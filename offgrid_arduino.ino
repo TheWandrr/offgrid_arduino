@@ -13,7 +13,7 @@
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
 #include <Wire.h>
-#include <INA226.h>
+#include <INA226.h> /* Consider replacing this with a library that uses all integer math if precision is a problem */
 
 #include "shared_constants.h"
 #include "internal_constants.h"
@@ -38,6 +38,8 @@ volatile uint32_t error_code_ticks;
 
 volatile bool base_timer_flag = false;
 
+// TODO: Use constants for these preset/init values, as they are used in more than one place.
+
 volatile bool one_second_flag = 0;
 volatile uint16_t timer_counter_1 = (1000) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001);
 
@@ -60,8 +62,13 @@ volatile int encoder1_value = 0;
 int encoder1_value_prev = 0;
 bool encoder1_button_value = 0;
 
+// Encoder switch debouncing
+//unsigned long encoder1_last_change_ms = 0;
+//bool encoder1_button_state_prev = 0;
+//bool encoder1_button_state_curr = 0;
+
 // Battery Monitoring (INA226 modules)
-const byte ina226_addr[] = {0x40};
+const byte ina226_addr[] = {0x40}; // TODO: Add more shunts here. Organize these better. Specific object per shunt, set defaults safely
 //const byte ina226_addr[] = {0x40, 0x41};
 INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
@@ -166,7 +173,7 @@ void initEncoders(void) {
   PCMSK0 = 0b00110000;
 #else
   #error "CODE STUB"
-#endif 
+#endif
 }
 
 void initBatteryMonitors(void) {
@@ -174,14 +181,17 @@ void initBatteryMonitors(void) {
   // Set up INA226 shunt monitor modules
   for (uint8_t i = 0; i < sizeof(ina226_addr); i++) {
     ina226[i].begin(ina226_addr[i]);
-    ina226[i].configure(INA226_AVERAGES_16, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_1100US, INA226_MODE_SHUNT_BUS_CONT);
-
-    // No public functions in the library to set this directly
-    writeSPI16(ina226_addr[i], INA226_REG_CALIBRATION, 0x07F3); // TODO: Figure out.  Obtained by trial and error
+    ina226[i].configure(INA226_AVERAGES_64, INA226_BUS_CONV_TIME_1100US, INA226_SHUNT_CONV_TIME_4156US, INA226_MODE_SHUNT_BUS_CONT);
   }
+
+  // Each one needs to be calibrated diffferently due to the unique shunt voltage and resistance
+  // TODO: Need to organize diffferently for better code maintenance and dynamic addition of shunts!
+
 
   // First time requires that the EEPROM be pre-programmed.  See offgrid_init_eeprom.ino
   EEPROM.get(0, battery_monitor_const); // Copy semi-constants from EEPROM to battery monitor structures
+
+  ina226[0].calibrate(0.0001f, 200); // TODO: Fetch these from EEPROM, make programmable through MQTT interface
 
 //  for (unsigned int i = 0; i < ( sizeof(battery_monitor_const)/sizeof(battery_monitor_const[0]) ); i++) {
 //    Serial.print("Bank ");Serial.print(i); Serial.println(":");
@@ -208,8 +218,9 @@ void initBatteryMonitors(void) {
 void processBatteryMonitors(void) {
   // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
-    battery_monitor_var[i].volts = readSPI16(ina226_addr[i], INA226_REG_BUSVOLTAGE) * battery_monitor_const[0].volts_multiplier;
-    battery_monitor_var[i].amps = (int16_t)readSPI16(ina226_addr[i], INA226_REG_SHUNTVOLTAGE) * battery_monitor_const[0].amps_multiplier;
+
+    battery_monitor_var[i].volts = ina226[i].readBusVoltage();
+    battery_monitor_var[i].amps = ina226[i].readShuntCurrent();
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
     battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
@@ -248,13 +259,14 @@ void processBatteryMonitors(void) {
 
 void broadcastBatteryMonitors(void) {
   // All values are decimal point shifted from float!
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_VOLTS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AMPS, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_AH_LEFT, (uint16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
-  serialize(MSG_RETURN_8_16, "bi", (uint8_t)MEMMAP_BANK0_SOC, (uint16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_VOLTS, (int16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AMPS, (int16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
 }
 
 void processEncoders() {
+  bool encoder1_button_read;
 
   // Only do something if the encoder value has actually changed
   if(encoder1_value != encoder1_value_prev) {
@@ -265,6 +277,35 @@ void processEncoders() {
     encoder1_value_prev = encoder1_value;
   }
 
+
+
+
+  /* TEST NEW CODE
+  encoder1_button_read = !digitalRead(ENCODER1_BTN_PIN);
+
+  if(encoder1_button_read != encoder1_button_state_prev) {
+      encoder1_last_change_ms = millis();
+  }
+
+  if((millis() - encoder1_last_change_ms) > DEBOUNCE_DELAY_MS) {
+    if(encoder1_button_read != encoder1_button_state_curr) {
+      encoder1_button_state_curr = encoder1_button_read;
+
+      if(encoder1_button_state_curr) { // button down
+        SetMemoryMap(MEMMAP_PWM_OUTPUT0, GetMemoryMap(MEMMAP_PWM_OUTPUT0) > 0 ? 0 : 100);
+      }
+
+    }
+
+    encoder1_button_state_prev = encoder1_button_read;
+  }
+  // TEST NEW CODE */
+
+
+
+
+
+// OLD CODE - Switch not debounced properly
   encoder1_button_value = encoder1_button.isPressed();
 
   // TODO: Holding button down for a specific period of time changes encoder mode
@@ -282,13 +323,15 @@ void processEncoders() {
     else { // BUTTON RELEASED
     }
   }
+// OLD CODE - Switch not debounced properly
+
 
 }
 
 // TODO: This could be used to signal error codes as well
 void processEncoderLEDState(void) {
-  if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 0) {
-    SetPWM(1, 15);
+  if(GetMemoryMap(MEMMAP_PWM_OUTPUT0) <= 15) {
+    SetPWM(1, 20);
   }
   else {
     SetPWM(1, 0);
@@ -379,6 +422,8 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
       battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;;
+
+    // TODO: Many of these have immediate effects that aren't yet being executed
 
     case MEMMAP_BANK0_AMPS_MULTIPLIER:
       battery_monitor_const[0].amps_multiplier = (uint32_t)data * 0.000001;
@@ -1023,6 +1068,7 @@ void processSerialReceive(void) {
   }
 }
 
+/*
 void writeSPI16(uint8_t addr, uint8_t reg, uint16_t val) {
   Wire.beginTransmission(addr);
   uint8_t lVal = val & 255;
@@ -1047,6 +1093,7 @@ uint16_t readSPI16(uint8_t addr, uint8_t reg) {
   regValue = (MSByte<<8) + LSByte;
   return regValue;
 }
+*/
 
 ////////////////////////// INTERRUPTS ///////////////////////////////
 /* Any variables changed in interrupts must be declared 'volatile' */
