@@ -380,8 +380,10 @@ void SetPWM(uint8_t output_num, uint8_t value) {
     if (output_num <= 3) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
       analogWrite(output[output_num], cie1931_percent_to_byte(output_value[output_num]));
-      //Serial.println(cie1931_percent_to_byte(output_value[output_num]));
-      //Serial.println("\n");
+      //////////////////
+      //analogWrite(output[output_num], (output_value[output_num] / 100) * 255 ); // DEBUG //
+      //analogWrite(output[output_num], 254 ); // DEBUG //
+      /////////////////
     }
     else if ( (output_num >= 4) && (output_num <= 7) ) {
       digitalWrite( output[output_num], (output_value[output_num] > 0) );

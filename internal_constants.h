@@ -104,7 +104,7 @@
   #define ENCODER1_CHA_PIN A0
   #define ENCODER1_CHB_PIN A1
   #define ENCODER1_BTN_PIN A2
-  
+
   #define ENCODER1_LED_PIN 8
   #define CEILING_LIGHT 3
   #define RESERVED_OUTPUT_2 5
@@ -113,19 +113,18 @@
   #define RESERVED_OUTPUT_5 4
   #define RESERVED_OUTPUT_6 7
   #define RESERVED_OUTPUT_7 3
-  
+
 #elif defined(ARDUINO_AVR_LEONARDO)
   #define INDICATOR_LED 13
-  
+
   #define ENCODER1_CHA_PIN 9 /* Requires interrupt */
   #define ENCODER1_CHB_PIN 8 /* Requires interrupt */
   #define ENCODER1_BTN_PIN 12
 
-  #define CEILING_LIGHT 10
-  
-  #define CEILING_LIGHT 10
+  #define CEILING_LIGHT 11
+
   #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
-  #define RESERVED_OUTPUT_2 11
+  #define RESERVED_OUTPUT_2 10 /* WARNING: The PWM on this pin did not give consistent 0-100% steps when driving ceiling lights */
   #define RESERVED_OUTPUT_3 A0 /* NO HARDWARE PWM */
   #define RESERVED_OUTPUT_4 A1 /* NO HARDWARE PWM */
   #define RESERVED_OUTPUT_5 A2 /* NO HARDWARE PWM */
