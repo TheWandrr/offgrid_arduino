@@ -58,6 +58,8 @@
 #define MEMMAP_BANK0_PEUKERT_FACTOR             0x002B /* 1 bytes, x100 */
 #define MEMMAP_BANK0_CHRG_EFFICIENCY            0x002C /* 1 bytes, x100 */
 
+#define MEMMAP_BANK0_TTG                        0x002D /* 2 bytes, x10 */
+
 // BANK1 battery monitor 0x0030 - 0x003F
 // BANK2 battery monitor 0x0040 - 0x004F
 // BANK3 battery monitor 0x0050 - 0x005F
@@ -93,14 +95,6 @@
 //#define MEMMAP_ADC_2_1                          MEMMAP_ADC_BASE + ADC_2_1 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 //#define MEMMAP_ADC_2_2                          MEMMAP_ADC_BASE + ADC_2_2 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
 //#define MEMMAP_ADC_2_3                          MEMMAP_ADC_BASE + ADC_2_3 /* 2 bytes, raw */ /* TODO: TO BE DEPRECATED! */
-
-#define MEMMAP_DEBUG_BASE           0x00F0
-
-#define MEMMAP_DEBUG0               MEMMAP_DEBUG_BASE + 0 /* 2 bytes, x1 */
-#define MEMMAP_DEBUG1               MEMMAP_DEBUG_BASE + 1 /* 2 bytes, x1 */
-#define MEMMAP_DEBUG2               MEMMAP_DEBUG_BASE + 2 /* 2 bytes, x1 */
-#define MEMMAP_DEBUG3               MEMMAP_DEBUG_BASE + 3 /* 2 bytes, x1 */
-#define MEMMAP_DEBUG4               MEMMAP_DEBUG_BASE + 4 /* 4 bytes, x1000000 */
 
 enum InterfaceAccessMask {
   AM_NONE =       0b00000000,

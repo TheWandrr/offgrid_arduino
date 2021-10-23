@@ -184,7 +184,8 @@ struct BMVar {
   float volts; // Battery voltage at last sample
   float amps; // Battery current at last sample
   float amphours_remaining; // Tracks coulombs
-  float percent_soc; // Redundant? Only use amphours_remaining / amphours_capacity ?
+  // TODO: Add total Ah in and out
+  //float percent_soc; // Redundant? Only use amphours_remaining / amphours_capacity ?
   enum ChargeState charge_state;
 };
 
@@ -219,6 +220,7 @@ static const char topic_name_13[] PROGMEM = "og/bm/0/peukert_factor";
 static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
 static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
 static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
+static const char topic_name_17[] PROGMEM = "og/bm/0/ttg";
 
 static const char topic_unit_01[] PROGMEM = "ms";
 static const char topic_unit_02[] PROGMEM = "V";
@@ -236,6 +238,8 @@ static const char topic_unit_13[] PROGMEM = "";
 static const char topic_unit_14[] PROGMEM = "";
 static const char topic_unit_15[] PROGMEM = "%";
 static const char topic_unit_16[] PROGMEM = "%";
+static const char topic_unit_17[] PROGMEM = "min";
+
 
 /* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Interface interface[] = {
@@ -245,6 +249,7 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      topic_name_03, topic_unit_03 },
   { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, topic_name_04, topic_unit_04 },
   { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, topic_name_05, topic_unit_05 },
+  { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      topic_name_17, topic_unit_17 },
 
   { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, topic_name_06, topic_unit_06 },
   { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, topic_name_07, topic_unit_07 },

@@ -210,9 +210,28 @@ void initBatteryMonitors(void) {
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
     // At startup/reset we can assume nothing about these until a full charge synchronization.
     battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
-    battery_monitor_var[i].percent_soc = 100;
+    //battery_monitor_var[i].percent_soc = 100;
     battery_monitor_var[i].charge_state = CS_NONE;
   }
+}
+
+// Returns the number of hours to full charge or full discharge at present current gain/loss
+float CalcTimeToGo(int bank_number)
+{
+  float ttg;
+
+  if (battery_monitor_var[bank_number].amps > 0) { // Charging
+    ttg = (battery_monitor_const[bank_number].amphours_capacity - battery_monitor_var[bank_number].amphours_remaining) / battery_monitor_var[bank_number].amps;
+  }
+  else if (battery_monitor_var[bank_number].amps < 0) { // Discharging
+    ttg = battery_monitor_var[bank_number].amphours_remaining / battery_monitor_var[bank_number].amps;
+    ttg = abs(ttg);
+  }
+  else { // No current flow
+    ttg = 0; // Should really be infinite, but that would be more difficult to convey
+  }
+
+  return ttg;
 }
 
 void processBatteryMonitors(void) {
@@ -223,7 +242,7 @@ void processBatteryMonitors(void) {
     battery_monitor_var[i].amps = ina226[i].readShuntCurrent();
     battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
     battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
-    battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
+    //battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
 
 //#error "Unfinished code - charge state machine"
 //
@@ -263,6 +282,7 @@ void broadcastBatteryMonitors(void) {
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AMPS, (int16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_TTG, (int16_t)GetMemoryMap(MEMMAP_BANK0_TTG));
 }
 
 void processEncoders() {
@@ -416,13 +436,13 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
     case MEMMAP_BANK0_AH_LEFT:
       battery_monitor_var[0].amphours_remaining = (int16_t)data / 10.0;
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
-      battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
+      //battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;
 
     case MEMMAP_BANK0_SOC:
       battery_monitor_var[0].amphours_remaining = ( (int16_t)(data) / 100.0 / 100.0 * battery_monitor_const[0].amphours_capacity );
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
-      battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
+      //battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;;
 
     // TODO: Many of these have immediate effects that aren't yet being executed
@@ -511,7 +531,9 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_BANK0_VOLTS:              return battery_monitor_var[0].volts * 100;
     case MEMMAP_BANK0_AMPS:               return battery_monitor_var[0].amps * 10;
     case MEMMAP_BANK0_AH_LEFT:            return battery_monitor_var[0].amphours_remaining * 10;
-    case MEMMAP_BANK0_SOC:                return battery_monitor_var[0].percent_soc * 100;
+    case MEMMAP_BANK0_SOC:                return (100 * battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity ) * 100;
+    case MEMMAP_BANK0_TTG:                return CalcTimeToGo(0) * 10;
+
     case MEMMAP_BANK0_AMPS_MULTIPLIER:    return battery_monitor_const[0].amps_multiplier * 1000000;
     case MEMMAP_BANK0_VOLTS_MULTIPLIER:   return battery_monitor_const[0].volts_multiplier * 1000000;
     case MEMMAP_BANK0_AH_CAPACITY:        return battery_monitor_const[0].amphours_capacity * 10;
