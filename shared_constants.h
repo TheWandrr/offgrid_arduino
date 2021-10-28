@@ -76,6 +76,21 @@
 #define MEMMAP_PWM_OUTPUT6                      MEMMAP_PWM_BASE + 6 /* 1 bytes, x1 */
 #define MEMMAP_PWM_OUTPUT7                      MEMMAP_PWM_BASE + 7 /* 1 bytes, x1 */
 
+#define MEMMAP_TEMP_ADDR_MAX        8
+#define MEMMAP_TEMP_BASE            0x00B0
+
+#define MEMMAP_TEMP_0                           MEMMAP_TEMP_BASE + 0 /* 2 bytes x10 */
+#define MEMMAP_TEMP_1                           MEMMAP_TEMP_BASE + 1 /* 2 bytes x10 */
+#define MEMMAP_TEMP_2                           MEMMAP_TEMP_BASE + 2 /* 2 bytes x10 */
+#define MEMMAP_TEMP_3                           MEMMAP_TEMP_BASE + 3 /* 2 bytes x10 */
+#define MEMMAP_TEMP_4                           MEMMAP_TEMP_BASE + 4 /* 2 bytes x10 */
+#define MEMMAP_TEMP_5                           MEMMAP_TEMP_BASE + 5 /* 2 bytes x10 */
+#define MEMMAP_TEMP_6                           MEMMAP_TEMP_BASE + 6 /* 2 bytes x10 */
+#define MEMMAP_TEMP_7                           MEMMAP_TEMP_BASE + 7 /* 2 bytes x10 */
+
+#define MEMMAP_TEMP_ADDR_BASE       MEMMAP_TEMP_BASE + MEMMAP_TEMP_ADDR_MAX
+
+
 //#define ADC_0_01 0 /* TODO: TO BE DEPRECATED! */
 //#define ADC_0_23 1 /* TODO: TO BE DEPRECATED! */
 //#define ADC_1_01 2 /* TODO: TO BE DEPRECATED! */

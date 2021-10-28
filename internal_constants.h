@@ -221,6 +221,8 @@ static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
 static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
 static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
 static const char topic_name_17[] PROGMEM = "og/bm/0/ttg";
+static const char topic_name_18[] PROGMEM = "og/temp/0";
+static const char topic_name_19[] PROGMEM = "og/temp/1";
 
 static const char topic_unit_01[] PROGMEM = "ms";
 static const char topic_unit_02[] PROGMEM = "V";
@@ -239,6 +241,8 @@ static const char topic_unit_14[] PROGMEM = "";
 static const char topic_unit_15[] PROGMEM = "%";
 static const char topic_unit_16[] PROGMEM = "%";
 static const char topic_unit_17[] PROGMEM = "min";
+static const char topic_unit_18[] PROGMEM = "";
+static const char topic_unit_19[] PROGMEM = "";
 
 
 /* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
@@ -262,6 +266,9 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, topic_name_14, topic_unit_14 },
 
   { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, topic_name_15, topic_unit_15 },
+
+  { MEMMAP_TEMP_0,                          2,  -1, AM_READ,      topic_name_18, topic_unit_18 },
+  { MEMMAP_TEMP_1,                          2,  -1, AM_READ,      topic_name_19, topic_unit_19 },
 
 };
 

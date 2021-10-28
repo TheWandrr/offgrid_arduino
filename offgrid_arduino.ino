@@ -14,6 +14,7 @@
 //#include <ArduinoUniqueID.h>
 #include <Wire.h>
 #include <INA226.h> /* Consider replacing this with a library that uses all integer math if precision is a problem */
+#include <DS18B20.h> // https://github.com/matmunk/DS18B20
 
 #include "shared_constants.h"
 #include "internal_constants.h"
@@ -74,6 +75,10 @@ INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
 struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 
+uint64_t ds_addr[8] = { 0,0,0,0,0,0,0,0 };
+float ds_temp[8] = { 0,0,0,0,0,0,0,0 };
+DS18B20 ds(2);
+
 bool inhibit_broadcast = false;
 uint32_t broadcast_period_ms = 1000;
 volatile uint32_t broadcast_timer_counter = broadcast_period_ms * (1 / (INTERRUPT_PERIOD_MICROSECONDS * 0.001));
@@ -104,6 +109,7 @@ void setup() {
 
   initEncoders();
   initBatteryMonitors();
+  initTemperatureSensors();
 
   interrupts();
 
@@ -126,6 +132,7 @@ void loop() {
     if(!inhibit_broadcast) {
       broadcastPWMValues();
       broadcastBatteryMonitors();
+      broadcastTemperatureSensors();
     }
   }
 
@@ -144,6 +151,7 @@ void loop() {
     one_second_flag = false;
 
     processBatteryMonitors();
+    processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there
   }
 
 }
@@ -215,6 +223,16 @@ void initBatteryMonitors(void) {
   }
 }
 
+void initTemperatureSensors(void) {
+  int8_t temp_index = 0;
+
+  while ( (temp_index <= MEMMAP_TEMP_ADDR_MAX) && ds.selectNext() ) {
+    ds.setResolution(12);
+    //ds.getAddress(ds_addr[temp_index]);
+    temp_index++;
+  }
+}
+
 // Returns the number of hours to full charge or full discharge at present current gain/loss
 float CalcTimeToGo(int bank_number)
 {
@@ -225,7 +243,7 @@ float CalcTimeToGo(int bank_number)
   }
   else if (battery_monitor_var[bank_number].amps < 0) { // Discharging
     ttg = battery_monitor_var[bank_number].amphours_remaining / battery_monitor_var[bank_number].amps;
-    ttg = abs(ttg);
+    //ttg = abs(ttg);
   }
   else { // No current flow
     ttg = 0; // Should really be infinite, but that would be more difficult to convey
@@ -283,6 +301,21 @@ void broadcastBatteryMonitors(void) {
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_TTG, (int16_t)GetMemoryMap(MEMMAP_BANK0_TTG));
+}
+
+void broadcastTemperatureSensors(void) {
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_0, (int16_t)GetMemoryMap(MEMMAP_TEMP_0));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_1, (int16_t)GetMemoryMap(MEMMAP_TEMP_1));
+}
+
+void processTemperatureSensors(void) {
+  int8_t temp_index = 0;
+
+  while (ds.selectNext()) {
+    //SetMemoryMap(MEMMAP_TEMP_BASE + temp_index, ds.getTempC() * 10);
+    SetMemoryMap(MEMMAP_TEMP_BASE + temp_index, 32.1f * 10);
+  }
+
 }
 
 void processEncoders() {
@@ -514,6 +547,18 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
       if( output[address & 0x00000007] == CEILING_LIGHT) { encoder1_value = (uint8_t)data; }
 
       return true;
+
+    case MEMMAP_TEMP_0:
+    case MEMMAP_TEMP_1:
+    case MEMMAP_TEMP_2:
+    case MEMMAP_TEMP_3:
+    case MEMMAP_TEMP_4:
+    case MEMMAP_TEMP_5:
+    case MEMMAP_TEMP_6:
+    case MEMMAP_TEMP_7:
+      ds_temp[address & 0x0007] = data / 10;
+      return true;
+
   }
 
   return false;
@@ -555,6 +600,28 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT6:
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
+
+    case MEMMAP_TEMP_0:
+    case MEMMAP_TEMP_1:
+    case MEMMAP_TEMP_2:
+    case MEMMAP_TEMP_3:
+    case MEMMAP_TEMP_4:
+    case MEMMAP_TEMP_5:
+    case MEMMAP_TEMP_6:
+    case MEMMAP_TEMP_7:
+      return ds_temp[address & 0x0007] * 10;
+
+/*
+    case MEMMAP_TEMP_ADDR_0:
+    case MEMMAP_TEMP_ADDR_1:
+    case MEMMAP_TEMP_ADDR_2:
+    case MEMMAP_TEMP_ADDR_3:
+    case MEMMAP_TEMP_ADDR_4:
+    case MEMMAP_TEMP_ADDR_5:
+    case MEMMAP_TEMP_ADDR_6:
+    case MEMMAP_TEMP_ADDR_7:
+      return ds_addr[address & 0x0007);
+*/
 
   }
 
