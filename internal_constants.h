@@ -241,8 +241,8 @@ static const char topic_unit_14[] PROGMEM = "";
 static const char topic_unit_15[] PROGMEM = "%";
 static const char topic_unit_16[] PROGMEM = "%";
 static const char topic_unit_17[] PROGMEM = "min";
-static const char topic_unit_18[] PROGMEM = "";
-static const char topic_unit_19[] PROGMEM = "";
+static const char topic_unit_18[] PROGMEM = "°C";
+static const char topic_unit_19[] PROGMEM = "°C";
 
 
 /* Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */

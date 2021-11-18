@@ -69,13 +69,12 @@ bool encoder1_button_value = 0;
 //bool encoder1_button_state_curr = 0;
 
 // Battery Monitoring (INA226 modules)
-const byte ina226_addr[] = {0x40}; // TODO: Add more shunts here. Organize these better. Specific object per shunt, set defaults safely
-//const byte ina226_addr[] = {0x40, 0x41};
+const byte ina226_addr[] = {0x40, 0x41, 0x44, 0x45}; // TODO: Add more shunts here. Organize these better. Specific object per shunt, set defaults safely
 INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
 struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 
-uint64_t ds_addr[8] = { 0,0,0,0,0,0,0,0 };
+//uint64_t ds_addr[8] = { 0,0,0,0,0,0,0,0 };
 float ds_temp[8] = { 0,0,0,0,0,0,0,0 };
 DS18B20 ds(2);
 
@@ -115,6 +114,9 @@ void setup() {
 
   serialize(MSG_POWER_ON, "");
   returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
+
+  serialize(MSG_DEBUG_STRING, "s", "Initialization complete"); /* DEBUG */
+
 }
 
 void loop() {
@@ -151,7 +153,7 @@ void loop() {
     one_second_flag = false;
 
     processBatteryMonitors();
-    processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there
+    processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there. Make sure it isn't blocking!!
   }
 
 }
@@ -224,11 +226,14 @@ void initBatteryMonitors(void) {
 }
 
 void initTemperatureSensors(void) {
-  int8_t temp_index = 0;
+  int8_t temp_index;
+
+  temp_index = 0;
 
   while ( (temp_index <= MEMMAP_TEMP_ADDR_MAX) && ds.selectNext() ) {
     ds.setResolution(12);
     //ds.getAddress(ds_addr[temp_index]);
+
     temp_index++;
   }
 }
@@ -309,11 +314,14 @@ void broadcastTemperatureSensors(void) {
 }
 
 void processTemperatureSensors(void) {
-  int8_t temp_index = 0;
+  int8_t temp_index;
+
+  temp_index = 0;
 
   while (ds.selectNext()) {
-    //SetMemoryMap(MEMMAP_TEMP_BASE + temp_index, ds.getTempC() * 10);
-    SetMemoryMap(MEMMAP_TEMP_BASE + temp_index, 32.1f * 10);
+    ds_temp[temp_index] = ds.getTempC() * 10;
+
+    temp_index++;
   }
 
 }
@@ -548,6 +556,7 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
       return true;
 
+/*
     case MEMMAP_TEMP_0:
     case MEMMAP_TEMP_1:
     case MEMMAP_TEMP_2:
@@ -558,6 +567,7 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
     case MEMMAP_TEMP_7:
       ds_temp[address & 0x0007] = data / 10;
       return true;
+*/
 
   }
 
@@ -760,7 +770,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
         break;
 
         case 's':
-          p = va_arg(args, const char * );
+          p = (const char *)va_arg(args, const char * );
         break;
       }
 
@@ -804,7 +814,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
 
       case 's':
         // TODO: Strip out characters from the string that will cause problems (unescaped?, comma, colon?)
-        Serial.write('"'); Serial.print(*p); Serial.write('"');
+        Serial.write('"'); Serial.print( (const char *) p ); Serial.write('"');
       break;
 
     }
