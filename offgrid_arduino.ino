@@ -13,7 +13,7 @@
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
 #include <Wire.h>
-#include <INA226.h> /* Consider replacing this with a library that uses all integer math if precision is a problem */
+#include <INA226.h> // https://github.com/peterus/INA226Lib /* Consider replacing this with a library that uses all integer math if precision is a problem */
 #include <DS18B20.h> // https://github.com/matmunk/DS18B20
 
 #include "shared_constants.h"
@@ -69,14 +69,18 @@ bool encoder1_button_value = 0;
 //bool encoder1_button_state_curr = 0;
 
 // Battery Monitoring (INA226 modules)
-const byte ina226_addr[] = {0x40, 0x41, 0x44, 0x45}; // TODO: Add more shunts here. Organize these better. Specific object per shunt, set defaults safely
+const byte ina226_addr[] = {0x40, 0x41, 0x44, 0x45}; // TODO: Organize these better. Specific object per shunt, set defaults safely
 INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
 struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 
 //uint64_t ds_addr[8] = { 0,0,0,0,0,0,0,0 };
-float ds_temp[8] = { 0,0,0,0,0,0,0,0 };
-DS18B20 ds(2);
+//float ds_temp[8] = { 0,0,0,0,0,0,0,0 };
+//DS18B20 ds(2);
+
+float solar_amps, solar_volts;
+float inverter_amps, inverter_volts;
+float vehicle_amps, vehicle_volts;
 
 bool inhibit_broadcast = false;
 uint32_t broadcast_period_ms = 1000;
@@ -107,15 +111,13 @@ void setup() {
   //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
 
   initEncoders();
-  initBatteryMonitors();
-  initTemperatureSensors();
+  initEnergyMonitors();
+  //initTemperatureSensors();
 
   interrupts();
 
   serialize(MSG_POWER_ON, "");
   returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
-
-  serialize(MSG_DEBUG_STRING, "s", "Initialization complete"); /* DEBUG */
 
 }
 
@@ -133,8 +135,9 @@ void loop() {
 
     if(!inhibit_broadcast) {
       broadcastPWMValues();
-      broadcastBatteryMonitors();
-      broadcastTemperatureSensors();
+      broadcastEnergyMonitors();
+      //broadcastTemperatureSensors();
+      //broadcastDebug(); /* DEBUG */
     }
   }
 
@@ -152,8 +155,8 @@ void loop() {
   if (one_second_flag) {
     one_second_flag = false;
 
-    processBatteryMonitors();
-    processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there. Make sure it isn't blocking!!
+    processEnergyMonitors();
+    //processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there. Make sure it isn't blocking!!
   }
 
 }
@@ -186,7 +189,7 @@ void initEncoders(void) {
 #endif
 }
 
-void initBatteryMonitors(void) {
+void initEnergyMonitors(void) {
 
   // Set up INA226 shunt monitor modules
   for (uint8_t i = 0; i < sizeof(ina226_addr); i++) {
@@ -201,7 +204,11 @@ void initBatteryMonitors(void) {
   // First time requires that the EEPROM be pre-programmed.  See offgrid_init_eeprom.ino
   EEPROM.get(0, battery_monitor_const); // Copy semi-constants from EEPROM to battery monitor structures
 
-  ina226[0].calibrate(0.0001f, 200); // TODO: Fetch these from EEPROM, make programmable through MQTT interface
+  // TODO: Fetch these from EEPROM, make programmable through MQTT interface
+  ina226[0].calibrate(0.0001f, 200); // Battery Bank 0 (House) shunt
+  ina226[1].calibrate(0.0015f, 50); // Solar Shunt
+  ina226[2].calibrate(0.000375f, 200); // Inverter Shunt
+  ina226[3].calibrate(0.000375f, 200); // Battery Bank 1 (Vehicle) shunt
 
 //  for (unsigned int i = 0; i < ( sizeof(battery_monitor_const)/sizeof(battery_monitor_const[0]) ); i++) {
 //    Serial.print("Bank ");Serial.print(i); Serial.println(":");
@@ -225,6 +232,7 @@ void initBatteryMonitors(void) {
   }
 }
 
+/*
 void initTemperatureSensors(void) {
   int8_t temp_index;
 
@@ -237,6 +245,7 @@ void initTemperatureSensors(void) {
     temp_index++;
   }
 }
+*/
 
 // Returns the number of hours to full charge or full discharge at present current gain/loss
 float CalcTimeToGo(int bank_number)
@@ -257,15 +266,21 @@ float CalcTimeToGo(int bank_number)
   return ttg;
 }
 
-void processBatteryMonitors(void) {
-  // TODO: Add variables for calculated time remaining (shows both charge and discharge by averaging power in/out over time
-  for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+void processEnergyMonitors(void) {
 
-    battery_monitor_var[i].volts = ina226[i].readBusVoltage();
-    battery_monitor_var[i].amps = ina226[i].readShuntCurrent();
-    battery_monitor_var[i].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[i].amps; // Calculation assumes execution every 1 second!
-    battery_monitor_var[i].amphours_remaining = constrain(battery_monitor_var[i].amphours_remaining, 0, battery_monitor_const[i].amphours_capacity);
-    //battery_monitor_var[i].percent_soc = (battery_monitor_var[i].amphours_remaining / battery_monitor_const[i].amphours_capacity ) * 100;
+  battery_monitor_var[0].volts = ina226[0].readBusVoltage();
+  battery_monitor_var[0].amps = ina226[0].readShuntCurrent();
+  battery_monitor_var[0].amphours_remaining += 1.0 / 3600.0 * battery_monitor_var[0].amps; // Calculation assumes execution every 1 second!
+  battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
+
+  solar_volts = ina226[1].readBusVoltage();
+  solar_amps = ina226[1].readShuntCurrent();
+
+  inverter_volts = ina226[2].readBusVoltage();
+  inverter_amps = ina226[2].readShuntCurrent();
+
+  vehicle_volts = ina226[3].readBusVoltage();
+  vehicle_amps = ina226[3].readShuntCurrent();
 
 //#error "Unfinished code - charge state machine"
 //
@@ -295,24 +310,43 @@ void processBatteryMonitors(void) {
 //
 //    }
 
-  }
-
 }
 
-void broadcastBatteryMonitors(void) {
+void broadcastEnergyMonitors(void) {
   // All values are decimal point shifted from float!
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_VOLTS, (int16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AMPS, (int16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_TTG, (int16_t)GetMemoryMap(MEMMAP_BANK0_TTG));
+
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_VOLTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_VOLTS));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_AMPS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_AMPS));
+
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_VOLTS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_VOLTS));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_AMPS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_AMPS));
+
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_VOLTS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_VOLTS));
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_AMPS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_AMPS));
 }
 
+void broadcastDebug(void) {
+  char dbgstr[80];
+
+  for (int i = 0; i < sizeof(ina226_addr); i++) {
+    sprintf(dbgstr, "ina226[%d].readShuntVoltage() --> %d", i, ina226[i].readShuntCurrent());
+    serialize(MSG_DEBUG_STRING, "s", dbgstr); /* DEBUG */
+  }
+}
+
+/*
 void broadcastTemperatureSensors(void) {
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_0, (int16_t)GetMemoryMap(MEMMAP_TEMP_0));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_1, (int16_t)GetMemoryMap(MEMMAP_TEMP_1));
 }
+*/
 
+/*
 void processTemperatureSensors(void) {
   int8_t temp_index;
 
@@ -325,6 +359,7 @@ void processTemperatureSensors(void) {
   }
 
 }
+*/
 
 void processEncoders() {
   bool encoder1_button_read;
@@ -599,6 +634,15 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_BANK0_PEUKERT_FACTOR:     return battery_monitor_const[0].peukert_factor * 100;
     case MEMMAP_BANK0_CHRG_EFFICIENCY:    return battery_monitor_const[0].charge_efficiency_factor * 100;
 
+    case MEMMAP_SOLAR_VOLTS:              return solar_volts * 100;
+    case MEMMAP_SOLAR_AMPS:               return solar_amps * 10;
+
+    case MEMMAP_INVERTER_VOLTS:           return inverter_volts * 100;
+    case MEMMAP_INVERTER_AMPS:            return inverter_amps * 10;
+
+    case MEMMAP_VEHICLE_VOLTS:            return vehicle_volts * 100;
+    case MEMMAP_VEHICLE_AMPS:             return vehicle_amps * 10;
+
     // TODO: Dynamic return of all defined battery bank variables?
 
     case MEMMAP_PWM_OUTPUT0:
@@ -611,6 +655,7 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
 
+/*
     case MEMMAP_TEMP_0:
     case MEMMAP_TEMP_1:
     case MEMMAP_TEMP_2:
@@ -620,6 +665,7 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_TEMP_6:
     case MEMMAP_TEMP_7:
       return ds_temp[address & 0x0007] * 10;
+*/
 
 /*
     case MEMMAP_TEMP_ADDR_0:
@@ -1194,7 +1240,7 @@ uint16_t readSPI16(uint8_t addr, uint8_t reg) {
   regValue = (MSByte<<8) + LSByte;
   return regValue;
 }
-*/
+/*
 
 ////////////////////////// INTERRUPTS ///////////////////////////////
 /* Any variables changed in interrupts must be declared 'volatile' */

@@ -61,6 +61,15 @@
 
 #define MEMMAP_BANK0_TTG                        0x002D /* 2 bytes, x10 */
 
+#define MEMMAP_SOLAR_VOLTS                      0x002E /* 2 bytes, x100 */
+#define MEMMAP_SOLAR_AMPS                       0x002F /* 2 bytes, x10 */
+
+#define MEMMAP_INVERTER_VOLTS                   0x0030 /* 2 bytes, x100 */
+#define MEMMAP_INVERTER_AMPS                    0x0031 /* 2 bytes, x10 */
+
+#define MEMMAP_VEHICLE_VOLTS                    0x0032 /* 2 bytes, x100 */
+#define MEMMAP_VEHICLE_AMPS                     0x0033 /* 2 bytes, x10 */
+
 // BANK1 battery monitor 0x0030 - 0x003F
 // BANK2 battery monitor 0x0040 - 0x004F
 // BANK3 battery monitor 0x0050 - 0x005F
@@ -91,6 +100,8 @@
 
 #define MEMMAP_TEMP_ADDR_BASE       MEMMAP_TEMP_BASE + MEMMAP_TEMP_ADDR_MAX
 
+// This is the start of a reserved address range for sensors that are local to the RPI
+#define MEMMAP_LOCAL_BASE           0xFF00
 
 //#define ADC_0_01 0 /* TODO: TO BE DEPRECATED! */
 //#define ADC_0_23 1 /* TODO: TO BE DEPRECATED! */
