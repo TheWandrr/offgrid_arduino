@@ -221,8 +221,6 @@ static const char topic_name_14[] PROGMEM = "og/bm/0/charge_efficiency_factor";
 static const char topic_name_15[] PROGMEM = "og/house/light/ceiling";
 static const char topic_name_16[] PROGMEM = "og/house/light/ceiling_encoder";
 static const char topic_name_17[] PROGMEM = "og/bm/0/ttg";
-static const char topic_name_18[] PROGMEM = "og/temp/0";
-static const char topic_name_19[] PROGMEM = "og/temp/1";
 static const char topic_name_20[] PROGMEM = "og/solar/volts";
 static const char topic_name_21[] PROGMEM = "og/solar/amps";
 static const char topic_name_22[] PROGMEM = "og/vehicle/volts";
@@ -247,8 +245,6 @@ static const char topic_unit_14[] PROGMEM = "";
 static const char topic_unit_15[] PROGMEM = "%";
 static const char topic_unit_16[] PROGMEM = "%";
 static const char topic_unit_17[] PROGMEM = "min";
-static const char topic_unit_18[] PROGMEM = "°C";
-static const char topic_unit_19[] PROGMEM = "°C";
 static const char topic_unit_20[] PROGMEM = "V";
 static const char topic_unit_21[] PROGMEM = "A";
 static const char topic_unit_22[] PROGMEM = "V";
@@ -258,37 +254,34 @@ static const char topic_unit_25[] PROGMEM = "A";
 
 /* TODO: Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Interface interface[] = {
-  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, AM_READWRITE, topic_name_01, topic_unit_01 },
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, AM_READWRITE, 0,  topic_name_01, topic_unit_01 },
 
-  { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      topic_name_02, topic_unit_02 },
-  { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      topic_name_03, topic_unit_03 },
-  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, topic_name_04, topic_unit_04 },
-  { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, topic_name_05, topic_unit_05 },
-  { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      topic_name_17, topic_unit_17 },
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_02, topic_unit_02 },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      1,  topic_name_03, topic_unit_03 },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_04 },
+  { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_05 },
+  { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_17 },
 
-  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, topic_name_06, topic_unit_06 },
-  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, topic_name_07, topic_unit_07 },
-  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, AM_READWRITE, topic_name_08, topic_unit_08 },
-  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, AM_READWRITE, topic_name_09, topic_unit_09 },
-  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, AM_READWRITE, topic_name_10, topic_unit_10 },
-  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, AM_READWRITE, topic_name_11, topic_unit_11 },
-  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, AM_READWRITE, topic_name_12, topic_unit_12 },
-  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, topic_name_13, topic_unit_13 },
-  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, topic_name_14, topic_unit_14 },
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_06 },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_07 },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, AM_READWRITE, 0,  topic_name_08, topic_unit_08 },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, AM_READWRITE, 0,  topic_name_09, topic_unit_09 },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, AM_READWRITE, 0,  topic_name_10, topic_unit_10 },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, AM_READWRITE, 0,  topic_name_11, topic_unit_11 },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, AM_READWRITE, 0,  topic_name_12, topic_unit_12 },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, 0,  topic_name_13, topic_unit_13 },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, 0,  topic_name_14, topic_unit_14 },
 
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, topic_name_15, topic_unit_15 },
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, 1,  topic_name_15, topic_unit_15 },
 
-  { MEMMAP_TEMP_0,                          2,  -1, AM_READ,      topic_name_18, topic_unit_18 },
-  { MEMMAP_TEMP_1,                          2,  -1, AM_READ,      topic_name_19, topic_unit_19 },
+  { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_20, topic_unit_20 },
+  { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      1,  topic_name_21, topic_unit_21 },
 
-  { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      topic_name_20, topic_unit_20 },
-  { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      topic_name_21, topic_unit_21 },
+  { MEMMAP_VEHICLE_VOLTS,                   2,  -2, AM_READ,      1,  topic_name_22, topic_unit_22 },
+  { MEMMAP_VEHICLE_AMPS,                    2,  -1, AM_READ,      1,  topic_name_23, topic_unit_23 },
 
-  { MEMMAP_VEHICLE_VOLTS,                   2,  -2, AM_READ,      topic_name_22, topic_unit_22 },
-  { MEMMAP_VEHICLE_AMPS,                    2,  -1, AM_READ,      topic_name_23, topic_unit_23 },
-
-  { MEMMAP_INVERTER_VOLTS,                  2,  -2, AM_READ,      topic_name_24, topic_unit_24 },
-  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      topic_name_25, topic_unit_25 },
+  { MEMMAP_INVERTER_VOLTS,                  2,  -2, AM_READ,      0,  topic_name_24, topic_unit_24 },
+  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      1,  topic_name_25, topic_unit_25 },
 
 };
 

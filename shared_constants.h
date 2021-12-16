@@ -135,6 +135,7 @@ struct Interface {
   uint8_t bytes;
   int8_t exponent;
   uint8_t access_mask;
+  uint8_t enable_logging; /* bool */
   const char *name;
   const char *unit;
 };

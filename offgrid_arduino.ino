@@ -12,9 +12,7 @@
 //#include <SDHT.h>
 //#include <PCF8591.h> /* Can interfere with interrupts! */
 //#include <ArduinoUniqueID.h>
-#include <Wire.h>
 #include <INA226.h> // https://github.com/peterus/INA226Lib /* Consider replacing this with a library that uses all integer math if precision is a problem */
-#include <DS18B20.h> // https://github.com/matmunk/DS18B20
 
 #include "shared_constants.h"
 #include "internal_constants.h"
@@ -74,10 +72,6 @@ INA226 ina226[sizeof(ina226_addr)];
 struct BMConst battery_monitor_const[sizeof(ina226_addr)];
 struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 
-//uint64_t ds_addr[8] = { 0,0,0,0,0,0,0,0 };
-//float ds_temp[8] = { 0,0,0,0,0,0,0,0 };
-//DS18B20 ds(2);
-
 float solar_amps, solar_volts;
 float inverter_amps, inverter_volts;
 float vehicle_amps, vehicle_volts;
@@ -112,7 +106,6 @@ void setup() {
 
   initEncoders();
   initEnergyMonitors();
-  //initTemperatureSensors();
 
   interrupts();
 
@@ -136,7 +129,6 @@ void loop() {
     if(!inhibit_broadcast) {
       broadcastPWMValues();
       broadcastEnergyMonitors();
-      //broadcastTemperatureSensors();
       //broadcastDebug(); /* DEBUG */
     }
   }
@@ -156,7 +148,6 @@ void loop() {
     one_second_flag = false;
 
     processEnergyMonitors();
-    //processTemperatureSensors(); // TODO: Add a 10 or 30 second flag and move this there. Make sure it isn't blocking!!
   }
 
 }
@@ -436,20 +427,30 @@ void processEncoderLEDState(void) {
 
 void returnAllInterfaces(void) {
   for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
-    serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
+    serialize(MSG_RETURN_INTERFACE, "ibBbbSS", interface[i].address
+                                             , interface[i].bytes
+                                             , interface[i].exponent
+                                             , interface[i].access_mask
+                                             , interface[i].enable_logging
+                                             , (const __FlashStringHelper *) interface[i].name
+                                             , (const __FlashStringHelper *) interface[i].unit
+                                             );
   }
 }
 
-bool returnInterface(uint16_t address) {
-  for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
-    if(interface[i].address == address) {
-      serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
-      return true;
-    }
-  }
-
-  serialize(MSG_GET_INTERFACE_ERROR, "i", address); // Not found if we didn't return already
-}
+//bool returnInterface(uint16_t address) {
+//  for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
+//    if(interface[i].address == address) {
+//      serialize(MSG_RETURN_INTERFACE, "ibBbBSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask,
+//                                                 interface[i].enable_logging, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
+//      //serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask,
+//      //                                          (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
+//      return true;
+//    }
+//  }
+//
+//  serialize(MSG_GET_INTERFACE_ERROR, "i", address); // Not found if we didn't return already
+//}
 
 // TODO: See about improving this to avoid using floating point
 uint8_t cie1931_percent_to_byte(uint8_t percent) {
@@ -732,18 +733,21 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   count = 0;
   value = 0;
 
+
   while(i < strlen(fmt)) {
 
     if(!isspace(fmt[i])) {
-      count += (fmt[i] - (uint8_t)('0'));
+      //count += (fmt[i] - (uint8_t)('0')); // TODO: What the heck was your logic here? What does this do?
+      count++;
     }
 
-    if (count > 255) {
-      return false; // Fail on message with a payload size greater than 256
-    }
+    //if (count > 255) {
+    //  return false; // Fail on message with a payload size greater than 256
+    //}
 
     i++;
   }
+
 
   Serial.write(0x02); // Output start of frame character
 
@@ -884,7 +888,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   Serial.write(0x03); // Output end of frame character
 
   Serial.println(); // This should be ignored by the receiver and is only here to help with semi-readable output
-  
+
   return true;
 }
 
@@ -1153,9 +1157,9 @@ void parse_message(char *msg_buf) {
           if (arg_count == 0) {
             returnAllInterfaces();
           }
-          else if (arg_count == 1) {
-            returnInterface((uint16_t)arg[0]);
-          }
+          //else if (arg_count == 1) {
+          //  returnInterface((uint16_t)arg[0]);
+          //}
           else {
               serialize(MSG_GET_INTERFACE_ERROR, "");
           }
