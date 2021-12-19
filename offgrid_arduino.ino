@@ -66,6 +66,7 @@ bool encoder1_button_value = 0;
 //bool encoder1_button_state_prev = 0;
 //bool encoder1_button_state_curr = 0;
 
+// TODO: Some of these are full battery monitors, others are just measuring voltage and current on shunts! Separate the two!
 // Battery Monitoring (INA226 modules)
 const byte ina226_addr[] = {0x40, 0x41, 0x44, 0x45}; // TODO: Organize these better. Specific object per shunt, set defaults safely
 INA226 ina226[sizeof(ina226_addr)];
@@ -200,7 +201,8 @@ void initEnergyMonitors(void) {
   ina226[2].calibrate(0.000375f, 200); // Inverter Shunt
   ina226[3].calibrate(0.000375f, 200); // Battery Bank 1 (Vehicle) shunt
 
-  for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+  //for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+  for (unsigned int i = 0; i < 1; i++) {
     // At startup/reset we can assume nothing about these until a full charge synchronization.
     battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
     battery_monitor_var[i].charge_state = CS_NONE;
@@ -241,34 +243,52 @@ void processEnergyMonitors(void) {
   vehicle_volts = ina226[3].readBusVoltage();
   vehicle_amps = ina226[3].readShuntCurrent();
 
-//#error "Unfinished code - charge state machine"
-//
-//    switch(battery_monitor_var_charge_state[i]) {
-//      CS_NONE:
-//        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
-//        else if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
-//        break;
-//
-//      CS_CHARGED:
-//        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
-//        break;
-//
-//      CS_CHARGING:
-//        if(battery_monitor_var[i].amps < 0) { charge_state = CS_DISCHARGING; }
-//        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
-//        // If voltage rises above 'volts_charged' and current falls below 'tail_current_factor', start a timer and set a "sync_pending" flag
-//        // If voltage falls below 'volts_charged' or current rises above 'tail_current_factor' (less some hysterisis amounts), stop the timer and clear the "sync_pending" flag
-//
-//        // If "sync_pending" is set and timer exceeds 'minutes_charged_detection_time', set all appropriate variables then switch to CHARGED state
-//        break;
-//
-//      CS_DISCHARGING:
-//        if(battery_monitor_var[i].amps > 0) { charge_state = CS_CHARGING; }
-//        else if(battery_monitor_var[i].amps == 0) { charge_state = CS_NONE; }
-//        break;
-//
-//    }
+//  for (int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
+  for (int i = 0; i < 1; i++) {
 
+    switch(battery_monitor_var[i].charge_state) {
+
+      case CS_NONE:
+        if(battery_monitor_var[i].amps > 0) { battery_monitor_var[i].charge_state = CS_CHARGING; }
+        else if(battery_monitor_var[i].amps < 0) { battery_monitor_var[i].charge_state = CS_DISCHARGING; }
+        break;
+
+      case CS_DISCHARGING:
+        if(battery_monitor_var[i].amps > 0) { battery_monitor_var[i].charge_state = CS_CHARGING; }
+        else if(battery_monitor_var[i].amps == 0) { battery_monitor_var[i].charge_state = CS_NONE; }
+        break;
+
+      case CS_CHARGING:
+        if(battery_monitor_var[i].amps < 0) { battery_monitor_var[i].charge_state = CS_DISCHARGING; }
+        else if(battery_monitor_var[i].amps == 0) { battery_monitor_var[i].charge_state = CS_NONE; }
+
+        // Check for definition of "charged" and trigger countdown to fully charged state
+        if ( battery_monitor_var[i].volts >= battery_monitor_const[i].volts_charged &&
+             battery_monitor_var[i].amps <= battery_monitor_const[i].amphours_capacity * battery_monitor_const[i].tail_current_factor ) {
+          battery_monitor_var[i].charge_state = CS_CHARGED_PENDING;
+          battery_monitor_var[i].charged_pending_timestamp = millis();
+        }
+        break;
+
+      case CS_CHARGED_PENDING:
+        // Check for conditions that no longer satisfy the definition of being "charged" and leave this state if true
+        if ( battery_monitor_var[i].volts < battery_monitor_const[i].volts_charged ||
+             battery_monitor_var[i].amps > battery_monitor_const[i].amphours_capacity * battery_monitor_const[i].tail_current_factor ) {
+          battery_monitor_var[i].charge_state = CS_NONE;
+        }
+        // Conditions were maintained for the specified time so we call it "charged"
+        else if ( (unsigned long)(millis() - battery_monitor_var[i].charged_pending_timestamp) >= MinutesToMilliseconds(battery_monitor_const[i].minutes_charged_detection_time) ) {
+          battery_monitor_var[i].charge_state = CS_CHARGED;
+          battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity; // SYNC SOC
+        }
+
+        break;
+
+      case CS_CHARGED:
+        if(battery_monitor_var[i].amps < 0) { battery_monitor_var[i].charge_state = CS_DISCHARGING; }
+        break;
+    }
+  }
 }
 
 void broadcastEnergyMonitors(void) {
@@ -278,6 +298,7 @@ void broadcastEnergyMonitors(void) {
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_TTG, (int16_t)GetMemoryMap(MEMMAP_BANK0_TTG));
+  serialize(MSG_RETURN_8_8,  "bb", (uint8_t)MEMMAP_BANK0_CS, (int8_t)GetMemoryMap(MEMMAP_BANK0_CS));
 
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_VOLTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_VOLTS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_AMPS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_AMPS));
@@ -287,6 +308,7 @@ void broadcastEnergyMonitors(void) {
 
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_VOLTS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_VOLTS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_AMPS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_AMPS));
+
 }
 
 void broadcastDebug(void) {
@@ -446,7 +468,7 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
     case MEMMAP_BANK0_SOC:
       battery_monitor_var[0].amphours_remaining = ( (int16_t)(data) / 100.0 / 100.0 * battery_monitor_const[0].amphours_capacity );
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
-      return true;;
+      return true;
 
     // TODO: Many of these have immediate effects that aren't yet being executed
 
@@ -537,6 +559,7 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_BANK0_AH_LEFT:            return battery_monitor_var[0].amphours_remaining * 10;
     case MEMMAP_BANK0_SOC:                return (100 * battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity ) * 100;
     case MEMMAP_BANK0_TTG:                return CalcTimeToGo(0) * 10;
+    case MEMMAP_BANK0_CS:                 return battery_monitor_var[0].charge_state;
 
     case MEMMAP_BANK0_AMPS_MULTIPLIER:    return battery_monitor_const[0].amps_multiplier * 1000000;
     case MEMMAP_BANK0_VOLTS_MULTIPLIER:   return battery_monitor_const[0].volts_multiplier * 1000000;
@@ -544,7 +567,7 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_BANK0_VOLTS_CHARGED:      return battery_monitor_const[0].volts_charged * 1000;
     case MEMMAP_BANK0_CHRG_DET_TIME:      return battery_monitor_const[0].minutes_charged_detection_time * 10;
     case MEMMAP_BANK0_TAIL_CURRENT:       return battery_monitor_const[0].tail_current_factor * 100;
-    case MEMMAP_BANK0_CURRENT_THRESHOLD:  return battery_monitor_const[0].tail_current_factor * 1000000;
+    case MEMMAP_BANK0_CURRENT_THRESHOLD:  return battery_monitor_const[0].current_threshold * 1000000;
     case MEMMAP_BANK0_PEUKERT_FACTOR:     return battery_monitor_const[0].peukert_factor * 100;
     case MEMMAP_BANK0_CHRG_EFFICIENCY:    return battery_monitor_const[0].charge_efficiency_factor * 100;
 
@@ -780,6 +803,10 @@ bool serialize(uint16_t address, const char *fmt, ...) {
   Serial.println(); // This should be ignored by the receiver and is only here to help with semi-readable output
 
   return true;
+}
+
+unsigned long MinutesToMilliseconds(unsigned int minutes) {
+  return minutes * 60 * 1000;
 }
 
 unsigned int asciiHexToInt(char ch) {

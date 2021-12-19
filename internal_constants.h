@@ -81,19 +81,6 @@
 
 #endif
 
-//#include <Adafruit_ADS1015.h>
-
-// ads.setGain(GAIN_TWOTHIRDS);  // 2/3x gain +/- 6.144V  1 bit = 3mV      0.1875mV (default)
-// ads.setGain(GAIN_ONE);        // 1x gain   +/- 4.096V  1 bit = 2mV      0.125mV
-// ads.setGain(GAIN_TWO);        // 2x gain   +/- 2.048V  1 bit = 1mV      0.0625mV
-// ads.setGain(GAIN_FOUR);       // 4x gain   +/- 1.024V  1 bit = 0.5mV    0.03125mV
-// ads.setGain(GAIN_EIGHT);      // 8x gain   +/- 0.512V  1 bit = 0.25mV   0.015625mV
-// ads.setGain(GAIN_SIXTEEN);    // 16x gain  +/- 0.256V  1 bit = 0.125mV  0.0078125mV
-
-//#define ADS1115_0_GAIN GAIN_SIXTEEN
-//#define ADS1115_1_GAIN GAIN_SIXTEEN
-//#define ADS1115_2_GAIN GAIN_ONE
-
 #define INTERRUPT_PERIOD_MICROSECONDS 500
 
 #define ENCODER1_STEP 10
@@ -163,10 +150,11 @@
 
 enum ChargeState {
   CS_NONE,
-  CS_CHARGING,
   CS_DISCHARGING,
+  CS_CHARGING,
+  CS_CHARGED_PENDING,
   CS_CHARGED
-} ;
+};
 
 struct BMConst {
   double amps_multiplier; // Used to set mv/A, including any calibration
@@ -186,7 +174,8 @@ struct BMVar {
   float amphours_remaining; // Tracks coulombs
   // TODO: Add total Ah in and out
   //float percent_soc; // Redundant? Only use amphours_remaining / amphours_capacity ?
-  enum ChargeState charge_state;
+  unsigned int charge_state;
+  unsigned long charged_pending_timestamp;
 };
 
 // TODO: This needs to be manually kept in sync with the above structure.  Find a better way that automatically adjusts?
@@ -227,6 +216,7 @@ static const char topic_name_22[] PROGMEM = "og/vehicle/volts";
 static const char topic_name_23[] PROGMEM = "og/vehicle/amps";
 static const char topic_name_24[] PROGMEM = "og/inverter/volts";
 static const char topic_name_25[] PROGMEM = "og/inverter/amps";
+static const char topic_name_26[] PROGMEM = "og/bm/0/cs";
 
 static const char topic_unit_01[] PROGMEM = "ms";
 static const char topic_unit_02[] PROGMEM = "V";
@@ -251,6 +241,7 @@ static const char topic_unit_22[] PROGMEM = "V";
 static const char topic_unit_23[] PROGMEM = "A";
 static const char topic_unit_24[] PROGMEM = "V";
 static const char topic_unit_25[] PROGMEM = "A";
+static const char topic_unit_26[] PROGMEM = "";
 
 /* TODO: Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Interface interface[] = {
@@ -261,6 +252,7 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_04 },
   { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_05 },
   { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_17 },
+  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      1,  topic_name_26, topic_unit_26 },
 
   { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_06 },
   { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_07 },
