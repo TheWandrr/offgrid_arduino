@@ -191,7 +191,6 @@ void initEnergyMonitors(void) {
   // Each one needs to be calibrated diffferently due to the unique shunt voltage and resistance
   // TODO: Need to organize diffferently for better code maintenance and dynamic addition of shunts!
 
-
   // First time requires that the EEPROM be pre-programmed.  See offgrid_init_eeprom.ino
   EEPROM.get(0, battery_monitor_const); // Copy semi-constants from EEPROM to battery monitor structures
 
@@ -201,42 +200,12 @@ void initEnergyMonitors(void) {
   ina226[2].calibrate(0.000375f, 200); // Inverter Shunt
   ina226[3].calibrate(0.000375f, 200); // Battery Bank 1 (Vehicle) shunt
 
-//  for (unsigned int i = 0; i < ( sizeof(battery_monitor_const)/sizeof(battery_monitor_const[0]) ); i++) {
-//    Serial.print("Bank ");Serial.print(i); Serial.println(":");
-//    Serial.print("amps_multiplier: "); Serial.println(battery_monitor_const[i].amps_multiplier, 6);
-//    Serial.print("volts_multiplier: "); Serial.println(battery_monitor_const[i].volts_multiplier, 6);
-//    Serial.print("amphours_capacity: "); Serial.println(battery_monitor_const[i].amphours_capacity);
-//    Serial.print("volts_charged: "); Serial.println(battery_monitor_const[i].volts_charged, 3);
-//    Serial.print("minutes_charged_detection_time: "); Serial.println(battery_monitor_const[i].minutes_charged_detection_time);
-//    Serial.print("current_threshold: "); Serial.println(battery_monitor_const[i].current_threshold, 6);
-//    Serial.print("tail_current_factor: "); Serial.println(battery_monitor_const[i].tail_current_factor, 2);
-//    Serial.print("peukert_factor: "); Serial.println(battery_monitor_const[i].peukert_factor, 3);
-//    Serial.print("charge_efficiency_factor: "); Serial.println(battery_monitor_const[i].charge_efficiency_factor, 2);
-//    Serial.println();
-//  }
-
   for (unsigned int i = 0; i < ( sizeof(battery_monitor_var) / sizeof(battery_monitor_var[0]) ); i++) {
     // At startup/reset we can assume nothing about these until a full charge synchronization.
     battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
-    //battery_monitor_var[i].percent_soc = 100;
     battery_monitor_var[i].charge_state = CS_NONE;
   }
 }
-
-/*
-void initTemperatureSensors(void) {
-  int8_t temp_index;
-
-  temp_index = 0;
-
-  while ( (temp_index <= MEMMAP_TEMP_ADDR_MAX) && ds.selectNext() ) {
-    ds.setResolution(12);
-    //ds.getAddress(ds_addr[temp_index]);
-
-    temp_index++;
-  }
-}
-*/
 
 // Returns the number of hours to full charge or full discharge at present current gain/loss
 float CalcTimeToGo(int bank_number)
@@ -248,7 +217,6 @@ float CalcTimeToGo(int bank_number)
   }
   else if (battery_monitor_var[bank_number].amps < 0) { // Discharging
     ttg = battery_monitor_var[bank_number].amphours_remaining / battery_monitor_var[bank_number].amps;
-    //ttg = abs(ttg);
   }
   else { // No current flow
     ttg = 0; // Should really be infinite, but that would be more difficult to convey
@@ -329,28 +297,6 @@ void broadcastDebug(void) {
     serialize(MSG_DEBUG_STRING, "s", dbgstr); /* DEBUG */
   }
 }
-
-/*
-void broadcastTemperatureSensors(void) {
-  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_0, (int16_t)GetMemoryMap(MEMMAP_TEMP_0));
-  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMP_1, (int16_t)GetMemoryMap(MEMMAP_TEMP_1));
-}
-*/
-
-/*
-void processTemperatureSensors(void) {
-  int8_t temp_index;
-
-  temp_index = 0;
-
-  while (ds.selectNext()) {
-    ds_temp[temp_index] = ds.getTempC() * 10;
-
-    temp_index++;
-  }
-
-}
-*/
 
 void processEncoders() {
   bool encoder1_button_read;
@@ -438,20 +384,6 @@ void returnAllInterfaces(void) {
   }
 }
 
-//bool returnInterface(uint16_t address) {
-//  for (unsigned int i = 0; i < ( sizeof(interface) / sizeof(struct Interface) ); i++) {
-//    if(interface[i].address == address) {
-//      serialize(MSG_RETURN_INTERFACE, "ibBbBSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask,
-//                                                 interface[i].enable_logging, (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
-//      //serialize(MSG_RETURN_INTERFACE, "ibBbSS", interface[i].address, interface[i].bytes, interface[i].exponent, interface[i].access_mask,
-//      //                                          (const __FlashStringHelper *) interface[i].name, (const __FlashStringHelper *) interface[i].unit);
-//      return true;
-//    }
-//  }
-//
-//  serialize(MSG_GET_INTERFACE_ERROR, "i", address); // Not found if we didn't return already
-//}
-
 // TODO: See about improving this to avoid using floating point
 uint8_t cie1931_percent_to_byte(uint8_t percent) {
 //  double L = percent;
@@ -477,10 +409,6 @@ void SetPWM(uint8_t output_num, uint8_t value) {
     if (output_num <= 3) {
       // cie1931 conversion should be the last step before output.  Everywhere else should deal with 0-100%
       analogWrite(output[output_num], cie1931_percent_to_byte(output_value[output_num]));
-      //////////////////
-      //analogWrite(output[output_num], (output_value[output_num] / 100) * 255 ); // DEBUG //
-      //analogWrite(output[output_num], 254 ); // DEBUG //
-      /////////////////
     }
     else if ( (output_num >= 4) && (output_num <= 7) ) {
       digitalWrite( output[output_num], (output_value[output_num] > 0) );
@@ -513,13 +441,11 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
     case MEMMAP_BANK0_AH_LEFT:
       battery_monitor_var[0].amphours_remaining = (int16_t)data / 10.0;
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
-      //battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;
 
     case MEMMAP_BANK0_SOC:
       battery_monitor_var[0].amphours_remaining = ( (int16_t)(data) / 100.0 / 100.0 * battery_monitor_const[0].amphours_capacity );
       battery_monitor_var[0].amphours_remaining = constrain(battery_monitor_var[0].amphours_remaining, 0, battery_monitor_const[0].amphours_capacity);
-      //battery_monitor_var[0].percent_soc = battery_monitor_var[0].amphours_remaining / battery_monitor_const[0].amphours_capacity * 100;
       return true;;
 
     // TODO: Many of these have immediate effects that aren't yet being executed
@@ -592,19 +518,6 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
       return true;
 
-/*
-    case MEMMAP_TEMP_0:
-    case MEMMAP_TEMP_1:
-    case MEMMAP_TEMP_2:
-    case MEMMAP_TEMP_3:
-    case MEMMAP_TEMP_4:
-    case MEMMAP_TEMP_5:
-    case MEMMAP_TEMP_6:
-    case MEMMAP_TEMP_7:
-      ds_temp[address & 0x0007] = data / 10;
-      return true;
-*/
-
   }
 
   return false;
@@ -655,30 +568,6 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT6:
     case MEMMAP_PWM_OUTPUT7:
       return GetPWM(address & 0x0007);
-
-/*
-    case MEMMAP_TEMP_0:
-    case MEMMAP_TEMP_1:
-    case MEMMAP_TEMP_2:
-    case MEMMAP_TEMP_3:
-    case MEMMAP_TEMP_4:
-    case MEMMAP_TEMP_5:
-    case MEMMAP_TEMP_6:
-    case MEMMAP_TEMP_7:
-      return ds_temp[address & 0x0007] * 10;
-*/
-
-/*
-    case MEMMAP_TEMP_ADDR_0:
-    case MEMMAP_TEMP_ADDR_1:
-    case MEMMAP_TEMP_ADDR_2:
-    case MEMMAP_TEMP_ADDR_3:
-    case MEMMAP_TEMP_ADDR_4:
-    case MEMMAP_TEMP_ADDR_5:
-    case MEMMAP_TEMP_ADDR_6:
-    case MEMMAP_TEMP_ADDR_7:
-      return ds_addr[address & 0x0007);
-*/
 
   }
 
@@ -741,6 +630,7 @@ bool serialize(uint16_t address, const char *fmt, ...) {
       count++;
     }
 
+    // TODO: Rewrite this using characters (i, b, B, etc) and string lengths to determine and limit payload size. Originally the format string was the number of bytes, thus this legacy code.
     //if (count > 255) {
     //  return false; // Fail on message with a payload size greater than 256
     //}
@@ -981,7 +871,6 @@ void parse_message(char *msg_buf) {
       break;
     }
 
-    //while ( (*p != '\0') && (*p != ':') && isxdigit(*p) ) {
     while ( isxdigit(*p) ) {
       address <<= 4;
       address += asciiHexToInt(*p);
@@ -1009,7 +898,6 @@ void parse_message(char *msg_buf) {
           // Get ascii-hex digits up to comma or end of string
           count = 0;
           value_buffer = 0;
-          //while ( (*p != '\n') && (*p != ',') && isxdigit(*p) && (count < 8) ) {
           while ( isxdigit(*p) ) {
             value_buffer <<= 4;
             value_buffer += asciiHexToInt(*p);
@@ -1072,7 +960,6 @@ void parse_message(char *msg_buf) {
       break;
     }
 
-    //p += sizeof(char);
     p++;
   }
 
@@ -1143,7 +1030,6 @@ void parse_message(char *msg_buf) {
 
       case MSG_SET_8_32:
         if (arg_count == 2) {
-//          Serial.print("arg[1] = "); Serial.println(arg[1], HEX); //DEBUG//
           if (SetMemoryMap((uint8_t)arg[0], (uint32_t)arg[1]) ) {
             serialize(MSG_RETURN_8_32, "bl", (uint8_t)arg[0], (uint32_t)GetMemoryMap(arg[0]));
           }
@@ -1157,9 +1043,6 @@ void parse_message(char *msg_buf) {
           if (arg_count == 0) {
             returnAllInterfaces();
           }
-          //else if (arg_count == 1) {
-          //  returnInterface((uint16_t)arg[0]);
-          //}
           else {
               serialize(MSG_GET_INTERFACE_ERROR, "");
           }
@@ -1218,33 +1101,6 @@ void processSerialReceive(void) {
     }
   }
 }
-
-/*
-void writeSPI16(uint8_t addr, uint8_t reg, uint16_t val) {
-  Wire.beginTransmission(addr);
-  uint8_t lVal = val & 255;
-  uint8_t hVal = val >> 8;
-  Wire.write(reg);
-  Wire.write(hVal);
-  Wire.write(lVal);
-  Wire.endTransmission();
-}
-
-uint16_t readSPI16(uint8_t addr, uint8_t reg) {
-  uint8_t MSByte = 0, LSByte = 0;
-  uint16_t regValue = 0;
-  Wire.beginTransmission(addr);
-  Wire.write(reg);
-  Wire.endTransmission();
-  Wire.requestFrom(addr,(uint8_t)2);
-  if(Wire.available()){
-    MSByte = Wire.read();
-    LSByte = Wire.read();
-  }
-  regValue = (MSByte<<8) + LSByte;
-  return regValue;
-}
-/*
 
 ////////////////////////// INTERRUPTS ///////////////////////////////
 /* Any variables changed in interrupts must be declared 'volatile' */
