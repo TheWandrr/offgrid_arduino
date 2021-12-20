@@ -301,9 +301,7 @@ void broadcastEnergyMonitors(void) {
   serialize(MSG_RETURN_8_8,  "bb", (uint8_t)MEMMAP_BANK0_CS, (int8_t)GetMemoryMap(MEMMAP_BANK0_CS));
 
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_AMPS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_AMPS));
-  //if (GetMemoryMap(MEMMAP_SOLAR_AMPS) > 0) {
-    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_VOLTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_VOLTS));
-  //}
+  serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_VOLTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_VOLTS));
 
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_VOLTS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_VOLTS));
   serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_AMPS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_AMPS));
