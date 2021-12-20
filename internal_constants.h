@@ -252,7 +252,7 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_04 },
   { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_05 },
   { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_17 },
-  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      1,  topic_name_26, topic_unit_26 },
+  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      0,  topic_name_26, topic_unit_26 },
 
   { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_06 },
   { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_07 },
@@ -264,7 +264,7 @@ static const Interface interface[] = {
   { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, 0,  topic_name_13, topic_unit_13 },
   { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, 0,  topic_name_14, topic_unit_14 },
 
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, 1,  topic_name_15, topic_unit_15 },
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, 0,  topic_name_15, topic_unit_15 },
 
   { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_20, topic_unit_20 },
   { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      1,  topic_name_21, topic_unit_21 },
