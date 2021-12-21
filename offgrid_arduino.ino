@@ -686,7 +686,6 @@ bool serialize(uint16_t address, const char *fmt, ...) {
     while(i < strlen(fmt)) {
 
         if(!isspace(fmt[i])) {
-            //count += (fmt[i] - (uint8_t)('0')); // TODO: What the heck was your logic here? What does this do?
             count++;
         }
 
@@ -1008,7 +1007,7 @@ void parse_message(char *msg_buf) {
                         arg_count++;
 
                         if( arg_count > ( sizeof(arg) / sizeof(arg[0]) ) ) {
-                            // TODO - ERROR: IMPOSED EMBEDDED LIMITATION
+                            // TODO - ERROR: IMPOSED ARBITRARY EMBEDDED LIMITATION
                             invalid_message = true;
                             break;
                         }
