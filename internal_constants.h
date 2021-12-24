@@ -95,11 +95,11 @@
   #define ENCODER1_LED_PIN 8
   #define CEILING_LIGHT 3
   #define RESERVED_OUTPUT_2 5
-  #define RESERVED_OUTPUT_3 6
-  #define RESERVED_OUTPUT_4 9
-  #define RESERVED_OUTPUT_5 4
-  #define RESERVED_OUTPUT_6 7
-  #define RESERVED_OUTPUT_7 3
+//  #define RESERVED_OUTPUT_3 6
+//  #define RESERVED_OUTPUT_4 9
+//  #define RESERVED_OUTPUT_5 4
+//  #define RESERVED_OUTPUT_6 7
+//  #define RESERVED_OUTPUT_7 3
 
 #elif defined(ARDUINO_AVR_LEONARDO)
   #define INDICATOR_LED 13
@@ -112,11 +112,12 @@
 
   #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
   #define RESERVED_OUTPUT_2 10 /* WARNING: The PWM on this pin did not give consistent 0-100% steps when driving ceiling lights */
-  #define RESERVED_OUTPUT_3 A0 /* NO HARDWARE PWM */
-  #define RESERVED_OUTPUT_4 A1 /* NO HARDWARE PWM */
-  #define RESERVED_OUTPUT_5 A2 /* NO HARDWARE PWM */
-  #define RESERVED_OUTPUT_6 A3 /* NO HARDWARE PWM */
-  #define RESERVED_OUTPUT_7 A4 /* NO HARDWARE PWM */
+
+  #define HVAC_ERR_IN       3
+  #define HVAC_HEAT_ON_IN   4
+  #define HVAC_REQ_FAN      5
+  #define HVAC_REQ_HEAT     6
+  #define HVAC_REQ_COOL     7
 
 #else
   #error "CODE STUB"
@@ -127,11 +128,8 @@
 #define OUTPUT0 CEILING_LIGHT
 #define OUTPUT1 ENCODER1_LED_PIN
 #define OUTPUT2 RESERVED_OUTPUT_2
-#define OUTPUT3 RESERVED_OUTPUT_3
-#define OUTPUT4 RESERVED_OUTPUT_4
-#define OUTPUT5 RESERVED_OUTPUT_5
-#define OUTPUT6 RESERVED_OUTPUT_6
-#define OUTPUT7 RESERVED_OUTPUT_7
+
+
 
 // Fatal error flash codes - make sure none of these are ambiguous when flashing as two hex nybbles
 // 0x0? is acceptable but not 0x?0
@@ -217,64 +215,57 @@ static const char topic_name_23[] PROGMEM = "og/vehicle/amps";
 static const char topic_name_24[] PROGMEM = "og/inverter/volts";
 static const char topic_name_25[] PROGMEM = "og/inverter/amps";
 static const char topic_name_26[] PROGMEM = "og/bm/0/cs";
+static const char topic_name_27[] PROGMEM = "og/hvac/error";
+static const char topic_name_28[] PROGMEM = "og/hvac/heating";
+static const char topic_name_29[] PROGMEM = "og/temperature/floor";
+static const char topic_name_30[] PROGMEM = "og/temperature/ceiling";
 
-static const char topic_unit_01[] PROGMEM = "ms";
-static const char topic_unit_02[] PROGMEM = "V";
-static const char topic_unit_03[] PROGMEM = "A";
-static const char topic_unit_04[] PROGMEM = "Ah";
-static const char topic_unit_05[] PROGMEM = "%";
-static const char topic_unit_06[] PROGMEM = "";
-static const char topic_unit_07[] PROGMEM = "";
-static const char topic_unit_08[] PROGMEM = "Ah";
-static const char topic_unit_09[] PROGMEM = "V";
-static const char topic_unit_10[] PROGMEM = "min";
-static const char topic_unit_11[] PROGMEM = "A";
-static const char topic_unit_12[] PROGMEM = "A";
-static const char topic_unit_13[] PROGMEM = "";
-static const char topic_unit_14[] PROGMEM = "";
-static const char topic_unit_15[] PROGMEM = "%";
-static const char topic_unit_16[] PROGMEM = "%";
-static const char topic_unit_17[] PROGMEM = "min";
-static const char topic_unit_20[] PROGMEM = "V";
-static const char topic_unit_21[] PROGMEM = "A";
-static const char topic_unit_22[] PROGMEM = "V";
-static const char topic_unit_23[] PROGMEM = "A";
-static const char topic_unit_24[] PROGMEM = "V";
-static const char topic_unit_25[] PROGMEM = "A";
-static const char topic_unit_26[] PROGMEM = "";
+static const char topic_unit_NONE[] PROGMEM = "";
+static const char topic_unit_A[] PROGMEM = "A";
+static const char topic_unit_ms[] PROGMEM = "ms";
+static const char topic_unit_V[] PROGMEM = "V";
+static const char topic_unit_Ah[] PROGMEM = "Ah";
+static const char topic_unit_PCT[] PROGMEM = "%";
+static const char topic_unit_min[] PROGMEM = "min";
+static const char topic_unit_DEGC[] PROGMEM = "°C";
 
 /* TODO: Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Interface interface[] = {
-  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, AM_READWRITE, 0,  topic_name_01, topic_unit_01 },
+  { MEMMAP_SETTING_BROADCAST_PERIOD_MS,     4,   0, AM_READWRITE, 0,  topic_name_01, topic_unit_ms },
 
-  { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_02, topic_unit_02 },
-  { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      1,  topic_name_03, topic_unit_03 },
-  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_04 },
-  { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_05 },
-  { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_17 },
-  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      0,  topic_name_26, topic_unit_26 },
+  { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_02, topic_unit_V },
+  { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      1,  topic_name_03, topic_unit_A },
+  { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_Ah },
+  { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_PCT },
+  { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_min },
+  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      0,  topic_name_26, topic_unit_NONE },
 
-  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_06 },
-  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_07 },
-  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, AM_READWRITE, 0,  topic_name_08, topic_unit_08 },
-  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, AM_READWRITE, 0,  topic_name_09, topic_unit_09 },
-  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, AM_READWRITE, 0,  topic_name_10, topic_unit_10 },
-  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, AM_READWRITE, 0,  topic_name_11, topic_unit_11 },
-  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, AM_READWRITE, 0,  topic_name_12, topic_unit_12 },
-  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, 0,  topic_name_13, topic_unit_13 },
-  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, 0,  topic_name_14, topic_unit_14 },
+  { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_NONE },
+  { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_NONE },
+  { MEMMAP_BANK0_AH_CAPACITY,               2,  -1, AM_READWRITE, 0,  topic_name_08, topic_unit_Ah },
+  { MEMMAP_BANK0_VOLTS_CHARGED,             2,  -3, AM_READWRITE, 0,  topic_name_09, topic_unit_V },
+  { MEMMAP_BANK0_CHRG_DET_TIME,             2,  -1, AM_READWRITE, 0,  topic_name_10, topic_unit_min },
+  { MEMMAP_BANK0_CURRENT_THRESHOLD,         4,  -6, AM_READWRITE, 0,  topic_name_11, topic_unit_A },
+  { MEMMAP_BANK0_TAIL_CURRENT,              1,  -2, AM_READWRITE, 0,  topic_name_12, topic_unit_A },
+  { MEMMAP_BANK0_PEUKERT_FACTOR,            1,  -2, AM_READWRITE, 0,  topic_name_13, topic_unit_NONE },
+  { MEMMAP_BANK0_CHRG_EFFICIENCY,           1,  -2, AM_READWRITE, 0,  topic_name_14, topic_unit_NONE },
 
-  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, 0,  topic_name_15, topic_unit_15 },
+  { MEMMAP_PWM_OUTPUT0,                     1,   0, AM_READWRITE, 0,  topic_name_15, topic_unit_PCT },
 
-  { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_20, topic_unit_20 },
-  { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      1,  topic_name_21, topic_unit_21 },
+  { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_20, topic_unit_V },
+  { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      1,  topic_name_21, topic_unit_A },
 
-  { MEMMAP_VEHICLE_VOLTS,                   2,  -2, AM_READ,      1,  topic_name_22, topic_unit_22 },
-  { MEMMAP_VEHICLE_AMPS,                    2,  -1, AM_READ,      1,  topic_name_23, topic_unit_23 },
+  { MEMMAP_VEHICLE_VOLTS,                   2,  -2, AM_READ,      1,  topic_name_22, topic_unit_V },
+  { MEMMAP_VEHICLE_AMPS,                    2,  -1, AM_READ,      1,  topic_name_23, topic_unit_A },
 
-  { MEMMAP_INVERTER_VOLTS,                  2,  -2, AM_READ,      0,  topic_name_24, topic_unit_24 },
-  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      1,  topic_name_25, topic_unit_25 },
+  { MEMMAP_INVERTER_VOLTS,                  2,  -2, AM_READ,      0,  topic_name_24, topic_unit_V },
+  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      1,  topic_name_25, topic_unit_A },
 
+  { MEMMAP_HVAC_ERROR,                      1,   0, AM_READ,      1,  topic_name_27, topic_unit_NONE },
+  { MEMMAP_HVAC_HEAT_ON,                    1,   0, AM_READ,      1,  topic_name_28, topic_unit_NONE },
+
+  { MEMMAP_TEMPERATURE_FLOOR,               2,  -1, AM_READWRITE, 1,  topic_name_29, topic_unit_DEGC },
+  { MEMMAP_TEMPERATURE_CEILING,             2,  -1, AM_READWRITE, 1,  topic_name_30, topic_unit_DEGC },
 };
 
 #endif /* __INTERNAL_CONSTANTS_H */

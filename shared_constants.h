@@ -69,6 +69,9 @@ enum Memmap {
   MEMMAP_VEHICLE_VOLTS,
   MEMMAP_VEHICLE_AMPS,
 
+  MEMMAP_HVAC_ERROR,
+  MEMMAP_HVAC_HEAT_ON,
+
   // The PWM outputs are bit addressed, so align at 0x_0 - Make sure this doesn't overlap previous enums!
   MEMMAP_PWM_OUTPUT0 = 0xA0,
   MEMMAP_PWM_OUTPUT1,
@@ -79,7 +82,10 @@ enum Memmap {
   MEMMAP_PWM_OUTPUT6,
   MEMMAP_PWM_OUTPUT7,
 
-  MEMMAP_LOCAL_BASE = 0xFF00 /* This needs to match with offgrid-daemon, which is where the local mappings originate */
+  /* The following needd to match with offgrid-daemon. This data is collected and pushed from there. */
+
+  MEMMAP_TEMPERATURE_FLOOR = 0xF0,
+  MEMMAP_TEMPERATURE_CEILING,
 };
 
 enum InterfaceAccessMask {

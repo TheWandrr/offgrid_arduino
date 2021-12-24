@@ -19,13 +19,25 @@
 
 // See avr/iom328p.h for register & bit definitions
 
-// Look up table for converting ID to actual output
-const byte output[8] = {OUTPUT0, OUTPUT1, OUTPUT2, OUTPUT3, OUTPUT4, OUTPUT5, OUTPUT6, OUTPUT7};
-byte output_value[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
+// Look up table for converting PWM OUTPUT ID to actual output
+const byte output[] = {OUTPUT0, OUTPUT1, OUTPUT2};
+byte output_value[] = {0, 0, 0}; // TODO: read/write should only be done through SetPWM/GetPWM.  To be refactored into a class at some point.
 
 enum ReceiveState {
     GET_STX = 1,
     GET_DATA = 2,
+};
+
+enum Encoder1Mode {
+    ENC1MODE_DIMMER,
+    ENC1MODE_NAVIGATE,
+} encoder1_mode;
+
+enum HVACState {
+    HS_ERROR,
+    HS_OFF,
+    HS_HEAT,
+    HS_COOL,
 };
 
 // Variables related to status code LED and flashing
@@ -50,11 +62,6 @@ volatile uint16_t timer_counter_2 = (10) * 1 / (INTERRUPT_PERIOD_MICROSECONDS * 
 
 volatile bool wdt_isr_executed = false;
 
-enum Encoder1Mode {
-    ENC1MODE_DIMMER,
-    ENC1MODE_NAVIGATE,
-} encoder1_mode;
-
 Rotary encoder1 = Rotary(ENCODER1_CHA_PIN, ENCODER1_CHB_PIN);
 Button encoder1_button = Button(ENCODER1_BTN_PIN, PULLUP);
 volatile int encoder1_value = 0;
@@ -76,6 +83,15 @@ struct BMVar battery_monitor_var[sizeof(ina226_addr)];
 float solar_amps, solar_volts;
 float inverter_amps, inverter_volts;
 float vehicle_amps, vehicle_volts;
+
+enum HVACState hvac_state = HS_OFF;
+uint8_t hvac_error_code = 0;
+uint8_t hvac_heat_on = 0;
+float hvac_heat_setpoint = 18.5;
+float hvac_heat_turn_on_margin = 0.75;
+float hvac_heat_turn_off_margin = 0.75;
+float hvac_temperature_ceiling = 0;
+float hvac_temperature_floor = 0;
 
 bool inhibit_broadcast = false;
 uint32_t broadcast_period_ms = 1000;
@@ -105,6 +121,7 @@ void setup() {
     Timer1.start();
     //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
 
+    initHVAC();
     initEncoders();
     initEnergyMonitors();
 
@@ -113,6 +130,12 @@ void setup() {
     serialize(MSG_POWER_ON, "");
     returnAllInterfaces(); // As a convenience, do this on startup/reset so that connected device doesn't have to request it
 
+//    serialize(MSG_DEBUG_STRING, "s", "Debugging interface active"); /* DEBUG */
+
+//    serialize(MSG_DEBUG_STRING, "s", "TURNING HEAT ON IN 15 SECONDS"); /* DEBUG */
+//    delay(15000);
+//    digitalWrite(HVAC_REQ_HEAT, 1);
+//    serialize(MSG_DEBUG_STRING, "s", "TESTING - HEAT ON"); /* DEBUG */
 }
 
 void loop() {
@@ -130,6 +153,7 @@ void loop() {
         if(!inhibit_broadcast) {
             broadcastPWMValues();
             broadcastEnergyMonitors();
+            broadcastHVAC();
             //broadcastDebug(); /* DEBUG */
         }
     }
@@ -143,12 +167,15 @@ void loop() {
     if (quarter_second_flag) {
         quarter_second_flag = false;
 
+        processHVACInputs();
+        //processHVAC();
     }
 
     if (one_second_flag) {
         one_second_flag = false;
 
         processEnergyMonitors();
+        processHVAC();
     }
 
 }
@@ -207,6 +234,129 @@ void initEnergyMonitors(void) {
         battery_monitor_var[i].amphours_remaining = battery_monitor_const[i].amphours_capacity;
         battery_monitor_var[i].charge_state = CS_NONE;
     }
+}
+
+void initHVAC(void) {
+    pinMode(HVAC_ERR_IN, INPUT_PULLUP); // Active low
+    pinMode(HVAC_HEAT_ON_IN, INPUT_PULLUP); // Active low
+    pinMode(HVAC_REQ_FAN, OUTPUT); // Active high
+    pinMode(HVAC_REQ_HEAT, OUTPUT); // Active high
+    pinMode(HVAC_REQ_COOL, OUTPUT); // Active high
+
+    digitalWrite(HVAC_REQ_FAN, 0);
+    digitalWrite(HVAC_REQ_HEAT, 0);
+
+    //hvac_state = HS_OFF;
+    // TODO: Initialize setpoints from values stored in EEPROM
+}
+
+// This is executed more frequently than the complementary processHVAC() to decode error pulses from the furnace
+void processHVACInputs(void) {
+    static bool reading_pulses = false;
+    static long last_falling_edge;
+    static unsigned int pulse_count;
+    static unsigned int last_state = HIGH;
+    static unsigned int curr_state = HIGH;;
+
+//    curr_state = digitalRead(HVAC_ERR_IN);
+    hvac_heat_on = !digitalRead(HVAC_HEAT_ON_IN);
+
+//    if (curr_state != last_state) {
+//        serialize(MSG_DEBUG_STRING, "s", "HVAC_ERR_IN state change!"); /* DEBUG */
+//        last_state = curr_state;
+//    }
+
+    return;
+
+    
+
+
+
+
+    
+
+    if (!reading_pulses) { // Beginning of error pulse train not yet detected
+
+        if ((curr_state == LOW) /*&& (last_state == HIGH)*/ ) { // Start of pulse train detected
+            serialize(MSG_DEBUG_STRING, "s", "Start of pulse train detected"); /* DEBUG */
+            pulse_count = 0;
+            last_falling_edge = millis();
+            reading_pulses = true;
+        }
+        else { // Line idle while not receiving pulse train
+            if ( (unsigned long)(millis() - last_falling_edge) >= 5000 ) { // Line idle for more than 5 sec resets error code
+                hvac_error_code = 0;
+            }
+        }
+    }
+    else { // we're somewhere in the middle of an error pulse train
+        if ((curr_state == LOW) && (last_state == HIGH)) { // Beginning of next pulse detected
+            last_falling_edge = millis();
+        }
+        else if ((curr_state == HIGH) && (last_state == LOW)) { // End of pulse, low period should be close to 500ms
+            if ( ( (unsigned long)(millis() - last_falling_edge) > 450 ) &&
+                 ( (unsigned long)(millis() - last_falling_edge) < 550 ) ) {
+                 pulse_count++;
+            }
+        }
+        else if ((curr_state == HIGH) && (last_state == HIGH)) { // Line idle for >= 2 sec indicates end of pulse train
+            if ( (unsigned long)(millis() - last_falling_edge) >= 2000 ) {
+                serialize(MSG_DEBUG_STRING, "s", "End of pulse train detected"); /* DEBUG */
+                reading_pulses = false;
+                hvac_error_code = pulse_count;
+            }
+        }
+    }
+
+    last_state = curr_state;
+}
+
+void processHVAC(void) {
+    const unsigned short MAX_ERROR_RESET_RETRY = 3;
+    static unsigned short err_count = 0;
+    static bool heat_reset_in_progress = false;
+
+//    if(heat_reset_in_progress) {
+//        return; // Can't do anything else with the heater while we're trying to reset it!
+//    }
+
+    // TODO: Check for and handle any errors indicated by heater
+//    if (err = check_hvac_error()) {
+//        err_count++;
+//        // TODO: Send a message indicating what the error message indicates, plus how many have been logged so far
+//        // TODO: resetHVACError() needs to be non-blocking, but we also need to wait for the reset process to complete before doing anything else with the heater
+//        if(resetHVACError(&heat_reset_in_progress) && (err_count < MAX_ERROR_RESET_RETRY)) {
+//            err_count = 0; // If the reset succeeded, zero the error counter
+//        }
+//        else {
+//            hvac_state = HS_ERROR; // No further attempts will be made to reset the error. Manual intervention required!
+//        }
+//    }
+
+    // TODO: Implement programmable schedule (maybe the scheduler resides in the Rpi??)
+
+    switch (hvac_state) {
+
+        case HS_ERROR:
+            // TODO: Make sure to disable any outputs for the heater, flag an error to the user
+        break;
+
+        case HS_OFF:
+            if ( hvac_temperature_ceiling < (hvac_heat_setpoint - hvac_heat_turn_on_margin) ) {
+                hvac_state = HS_HEAT;
+                digitalWrite(HVAC_REQ_HEAT, 1);
+            }
+        break;
+
+        case HS_HEAT:
+            if ( hvac_temperature_ceiling > (hvac_heat_setpoint + hvac_heat_turn_off_margin) ) {
+                hvac_state = HS_OFF;
+                digitalWrite(HVAC_REQ_HEAT, 0);
+            }
+        break;
+
+    }
+
 }
 
 // Returns the number of hours to full charge or full discharge at present current gain/loss
@@ -334,7 +484,14 @@ void broadcastDebug(void) {
     }
 }
 
-void processEncoders() {
+void broadcastHVAC(void) {
+    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_HVAC_ERROR, (uint8_t)GetMemoryMap(MEMMAP_HVAC_ERROR));
+    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_HVAC_HEAT_ON, (uint8_t)GetMemoryMap(MEMMAP_HVAC_HEAT_ON));
+//    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMPERATURE_CEILING, (uint8_t)GetMemoryMap(MEMMAP_TEMPERATURE_CEILING));
+//    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMPERATURE_FLOOR, (uint8_t)GetMemoryMap(MEMMAP_TEMPERATURE_FLOOR));
+}
+
+void processEncoders(void) {
     bool encoder1_button_read;
 
     // Only do something if the encoder value has actually changed
@@ -453,7 +610,9 @@ void SetPWM(uint8_t output_num, uint8_t value) {
 }
 
 uint8_t GetPWM(uint8_t output_num) {
-    return output_value[output_num];
+    if ( output_num < sizeof(output_value) ) { // Ensure write to array is within bounds
+        return output_value[output_num];
+    }
 }
 
 void broadcastPWMValues(void) {
@@ -556,6 +715,15 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
         return true;
 
+    case MEMMAP_TEMPERATURE_FLOOR:
+        //TODO: probably better not to constrain these as much or at all
+        hvac_temperature_floor = constrain(data * 0.1, 5.0, 30.0);
+        return true;
+
+    case MEMMAP_TEMPERATURE_CEILING:
+        hvac_temperature_ceiling = constrain(data * 0.1, 5.0, 30.0);
+        return true;
+
     }
 
     return false;
@@ -617,6 +785,12 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_VEHICLE_AMPS:
         return vehicle_amps * 10;
 
+
+    case MEMMAP_HVAC_ERROR:
+        return hvac_error_code;
+    case MEMMAP_HVAC_HEAT_ON:
+        return hvac_heat_on;
+
     // TODO: Dynamic return of all defined battery bank variables?
 
     case MEMMAP_PWM_OUTPUT0:
@@ -628,6 +802,11 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT6:
     case MEMMAP_PWM_OUTPUT7:
         return GetPWM(address & 0x0007);
+
+    case MEMMAP_TEMPERATURE_FLOOR:
+        return hvac_temperature_floor * 10;
+    case MEMMAP_TEMPERATURE_CEILING:
+        return hvac_temperature_ceiling * 10;
 
     }
 
