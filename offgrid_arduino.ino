@@ -87,9 +87,11 @@ float vehicle_amps, vehicle_volts;
 enum HVACState hvac_state = HS_OFF;
 uint8_t hvac_error_code = 0;
 uint8_t hvac_heat_on = 0;
-float hvac_heat_setpoint = 18.5;
-float hvac_heat_turn_on_margin = 0.75;
-float hvac_heat_turn_off_margin = 0.75;
+float hvac_desired_temperature = 16.5;
+const float HEAT_TURN_ON_MARGIN = 0.75;
+const float HEAT_TURN_OFF_MARGIN = 0.75;
+const float MIN_DESIRED_TEMPERATURE = 8.0;
+const float MAX_DESIRED_TEMPERATURE = 35.0;
 float hvac_temperature_ceiling = 0;
 float hvac_temperature_floor = 0;
 
@@ -167,8 +169,7 @@ void loop() {
     if (quarter_second_flag) {
         quarter_second_flag = false;
 
-        processHVACInputs();
-        //processHVAC();
+        //processHVACInputs();
     }
 
     if (one_second_flag) {
@@ -342,14 +343,14 @@ void processHVAC(void) {
         break;
 
         case HS_OFF:
-            if ( hvac_temperature_ceiling < (hvac_heat_setpoint - hvac_heat_turn_on_margin) ) {
+            if ( hvac_temperature_ceiling < (hvac_desired_temperature - HEAT_TURN_ON_MARGIN) ) {
                 hvac_state = HS_HEAT;
                 digitalWrite(HVAC_REQ_HEAT, 1);
             }
         break;
 
         case HS_HEAT:
-            if ( hvac_temperature_ceiling > (hvac_heat_setpoint + hvac_heat_turn_off_margin) ) {
+            if ( hvac_temperature_ceiling > (hvac_desired_temperature + HEAT_TURN_OFF_MARGIN) ) {
                 hvac_state = HS_OFF;
                 digitalWrite(HVAC_REQ_HEAT, 0);
             }
@@ -487,8 +488,8 @@ void broadcastDebug(void) {
 void broadcastHVAC(void) {
     serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_HVAC_ERROR, (uint8_t)GetMemoryMap(MEMMAP_HVAC_ERROR));
     serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_HVAC_HEAT_ON, (uint8_t)GetMemoryMap(MEMMAP_HVAC_HEAT_ON));
-//    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMPERATURE_CEILING, (uint8_t)GetMemoryMap(MEMMAP_TEMPERATURE_CEILING));
-//    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_TEMPERATURE_FLOOR, (uint8_t)GetMemoryMap(MEMMAP_TEMPERATURE_FLOOR));
+    serialize(MSG_RETURN_8_8, "bb", (uint8_t)MEMMAP_HVAC_STATE, (uint8_t)GetMemoryMap(MEMMAP_HVAC_STATE));
+    serialize(MSG_RETURN_8_16, "bI", (int16_t)MEMMAP_HVAC_DESIRED_TEMPERATURE, (int16_t)GetMemoryMap(MEMMAP_HVAC_DESIRED_TEMPERATURE));
 }
 
 void processEncoders(void) {
@@ -619,6 +620,8 @@ void broadcastPWMValues(void) {
     serialize(MSG_RETURN_8_8, "bb", (uint8_t)0xA0, (uint8_t)GetMemoryMap(0xA0));
 }
 
+// TODO: Can the interface structure be used to simplify this and make for handling in a more generic manner? Is it possible to require changes to be made in only one or two places instead of three or four?
+
 /*************************************************/
 /* SET VIRTUAL MEMORY MAP                        */
 /*************************************************/
@@ -717,11 +720,18 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
     case MEMMAP_TEMPERATURE_FLOOR:
         //TODO: probably better not to constrain these as much or at all
-        hvac_temperature_floor = constrain(data * 0.1, 5.0, 30.0);
+        //hvac_temperature_floor = constrain(data * 0.1, -45.0, 50.0);
+        hvac_temperature_floor = data * 0.1;
         return true;
 
     case MEMMAP_TEMPERATURE_CEILING:
-        hvac_temperature_ceiling = constrain(data * 0.1, 5.0, 30.0);
+        //hvac_temperature_ceiling = constrain(data * 0.1, -45.0, 50.0);
+        hvac_temperature_ceiling = data * 0.1;
+        return true;
+
+    case MEMMAP_HVAC_DESIRED_TEMPERATURE:
+        //hvac_desired_temperature = constrain(data * 0.1, MIN_DESIRED_TEMPERATURE, MAX_DESIRED_TEMPERATURE);
+        hvac_desired_temperature = data * 0.1;
         return true;
 
     }
@@ -807,6 +817,11 @@ uint32_t GetMemoryMap(uint16_t address) {
         return hvac_temperature_floor * 10;
     case MEMMAP_TEMPERATURE_CEILING:
         return hvac_temperature_ceiling * 10;
+
+    case MEMMAP_HVAC_STATE:
+        return (uint8_t)hvac_state;
+    case MEMMAP_HVAC_DESIRED_TEMPERATURE:
+        return hvac_desired_temperature * 10;
 
     }
 

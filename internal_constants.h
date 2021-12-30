@@ -219,6 +219,8 @@ static const char topic_name_27[] PROGMEM = "og/hvac/error";
 static const char topic_name_28[] PROGMEM = "og/hvac/heating";
 static const char topic_name_29[] PROGMEM = "og/temperature/floor";
 static const char topic_name_30[] PROGMEM = "og/temperature/ceiling";
+static const char topic_name_31[] PROGMEM = "og/hvac/desired_temperature";
+static const char topic_name_32[] PROGMEM = "og/hvac/state";
 
 static const char topic_unit_NONE[] PROGMEM = "";
 static const char topic_unit_A[] PROGMEM = "A";
@@ -266,6 +268,9 @@ static const Interface interface[] = {
 
   { MEMMAP_TEMPERATURE_FLOOR,               2,  -1, AM_READWRITE, 1,  topic_name_29, topic_unit_DEGC },
   { MEMMAP_TEMPERATURE_CEILING,             2,  -1, AM_READWRITE, 1,  topic_name_30, topic_unit_DEGC },
+
+  { MEMMAP_HVAC_DESIRED_TEMPERATURE,        2,  -1, AM_READWRITE, 1,  topic_name_31, topic_unit_DEGC },
+  { MEMMAP_HVAC_STATE,                      1,   0, AM_READ,      1,  topic_name_32, topic_unit_NONE },
 };
 
 #endif /* __INTERNAL_CONSTANTS_H */
