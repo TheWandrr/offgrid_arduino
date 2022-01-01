@@ -36,8 +36,24 @@ enum Encoder1Mode {
 enum HVACState {
     HS_ERROR,
     HS_OFF,
+    HS_IN_RANGE,
     HS_HEAT,
     HS_COOL,
+};
+
+enum HVACReqState {
+    HVAC_RQ_OFF,
+    HVAC_RQ_AUTO,
+    HVAC_RQ_OVERRIDE,
+    HVAC_RQ_TIMER,
+};
+
+enum PropexFurnaceErrorCode {
+    PFEC_NONE,
+    PFEC_FLAME,
+    PFEC_OVERHEAT,
+    PFEC_VOLTAGE,
+    PFEC_AIR
 };
 
 // Variables related to status code LED and flashing
@@ -84,7 +100,7 @@ float solar_amps, solar_volts;
 float inverter_amps, inverter_volts;
 float vehicle_amps, vehicle_volts;
 
-enum HVACState hvac_state = HS_OFF;
+enum HVACState hvac_state = HS_IN_RANGE; // TODO: This should start at HS_OFF and be changed when the mode is changed to something else
 uint8_t hvac_error_code = 0;
 uint8_t hvac_heat_on = 0;
 float hvac_desired_temperature = 16.5;
@@ -164,12 +180,12 @@ void loop() {
         ten_millisecond_flag = false;
 
         processEncoderLEDState();
+        processHVACInputs();
     }
 
     if (quarter_second_flag) {
         quarter_second_flag = false;
 
-        //processHVACInputs();
     }
 
     if (one_second_flag) {
@@ -242,7 +258,7 @@ void initHVAC(void) {
     pinMode(HVAC_HEAT_ON_IN, INPUT_PULLUP); // Active low
     pinMode(HVAC_REQ_FAN, OUTPUT); // Active high
     pinMode(HVAC_REQ_HEAT, OUTPUT); // Active high
-    pinMode(HVAC_REQ_COOL, OUTPUT); // Active high
+//    pinMode(HVAC_REQ_COOL, OUTPUT); // Active high
 
     digitalWrite(HVAC_REQ_FAN, 0);
     digitalWrite(HVAC_REQ_HEAT, 0);
@@ -251,7 +267,7 @@ void initHVAC(void) {
     // TODO: Initialize setpoints from values stored in EEPROM
 }
 
-// This is executed more frequently than the complementary processHVAC() to decode error pulses from the furnace
+// NOTE: This must be executed frequently enough to distinguish 500ms half-period pulses, eg. every 10ms.
 void processHVACInputs(void) {
     static bool reading_pulses = false;
     static long last_falling_edge;
@@ -259,27 +275,13 @@ void processHVACInputs(void) {
     static unsigned int last_state = HIGH;
     static unsigned int curr_state = HIGH;;
 
-//    curr_state = digitalRead(HVAC_ERR_IN);
+    curr_state = digitalRead(HVAC_ERR_IN);
     hvac_heat_on = !digitalRead(HVAC_HEAT_ON_IN);
-
-//    if (curr_state != last_state) {
-//        serialize(MSG_DEBUG_STRING, "s", "HVAC_ERR_IN state change!"); /* DEBUG */
-//        last_state = curr_state;
-//    }
-
-    return;
-
-    
-
-
-
-
-    
 
     if (!reading_pulses) { // Beginning of error pulse train not yet detected
 
         if ((curr_state == LOW) /*&& (last_state == HIGH)*/ ) { // Start of pulse train detected
-            serialize(MSG_DEBUG_STRING, "s", "Start of pulse train detected"); /* DEBUG */
+            //serialize(MSG_DEBUG_STRING, "s", "Start of pulse train detected"); /* DEBUG */
             pulse_count = 0;
             last_falling_edge = millis();
             reading_pulses = true;
@@ -295,14 +297,13 @@ void processHVACInputs(void) {
             last_falling_edge = millis();
         }
         else if ((curr_state == HIGH) && (last_state == LOW)) { // End of pulse, low period should be close to 500ms
-            if ( ( (unsigned long)(millis() - last_falling_edge) > 450 ) &&
-                 ( (unsigned long)(millis() - last_falling_edge) < 550 ) ) {
+            if ( ( (unsigned long)(millis() - last_falling_edge) > 475 ) &&
+                 ( (unsigned long)(millis() - last_falling_edge) < 525 ) ) {
                  pulse_count++;
             }
         }
         else if ((curr_state == HIGH) && (last_state == HIGH)) { // Line idle for >= 2 sec indicates end of pulse train
             if ( (unsigned long)(millis() - last_falling_edge) >= 2000 ) {
-                serialize(MSG_DEBUG_STRING, "s", "End of pulse train detected"); /* DEBUG */
                 reading_pulses = false;
                 hvac_error_code = pulse_count;
             }
@@ -310,28 +311,22 @@ void processHVACInputs(void) {
     }
 
     last_state = curr_state;
+
+    if(hvac_error_code != 0) {
+        hvac_state = HS_ERROR;
+    }
 }
 
 void processHVAC(void) {
     const unsigned short MAX_ERROR_RESET_RETRY = 3;
+    char errstr[128];
+
     static unsigned short err_count = 0;
     static bool heat_reset_in_progress = false;
+    static bool hvac_error_message_sent = false;
 
 //    if(heat_reset_in_progress) {
 //        return; // Can't do anything else with the heater while we're trying to reset it!
-//    }
-
-    // TODO: Check for and handle any errors indicated by heater
-//    if (err = check_hvac_error()) {
-//        err_count++;
-//        // TODO: Send a message indicating what the error message indicates, plus how many have been logged so far
-//        // TODO: resetHVACError() needs to be non-blocking, but we also need to wait for the reset process to complete before doing anything else with the heater
-//        if(resetHVACError(&heat_reset_in_progress) && (err_count < MAX_ERROR_RESET_RETRY)) {
-//            err_count = 0; // If the reset succeeded, zero the error counter
-//        }
-//        else {
-//            hvac_state = HS_ERROR; // No further attempts will be made to reset the error. Manual intervention required!
-//        }
 //    }
 
     // TODO: Implement programmable schedule (maybe the scheduler resides in the Rpi??)
@@ -339,22 +334,81 @@ void processHVAC(void) {
     switch (hvac_state) {
 
         case HS_ERROR:
-            // TODO: Make sure to disable any outputs for the heater, flag an error to the user
+
+            if (hvac_error_code == 0) {
+                hvac_state = HS_IN_RANGE;
+                hvac_error_message_sent = false;
+
+                serialize(MSG_DEBUG_STRING, "HVAC error cleared", errstr);
+            }
+            else if (!hvac_error_message_sent) {
+
+                switch (hvac_error_code) {
+                    case PFEC_FLAME:
+                        sprintf(errstr, "HVAC Error: Flame failure. Check fuel level.");
+                    break;
+
+                    case PFEC_OVERHEAT:
+                        sprintf(errstr, "HVAC Error: Internal maximum temperature exceeded.");
+                    break;
+
+                    case PFEC_VOLTAGE:
+                        sprintf(errstr, "HVAC Error: Supply voltage not within acceptable range.");
+                    break;
+
+                    case PFEC_AIR:
+                        sprintf(errstr, "HVAC Error: Combustion air flow unbalanced. Check for blockage or excess wind.");
+                    break;
+
+                    default:
+                        sprintf(errstr, "HVAC Error: Undefined [%d] - Contact manufacturer.", hvac_error_code);
+                    break;
+                }
+
+                // TODO: Add dedicated message for error message reporting
+                serialize(MSG_DEBUG_STRING, "s", errstr);
+                hvac_error_message_sent = true;
+            }
+
+
+            // TODO: Check for and handle any errors indicated by heater
+//          if (err = check_hvac_error()) {
+//              err_count++;
+//              // TODO: Send a message indicating what the error message indicates, plus how many have been logged so far
+//              // TODO: resetHVACError() needs to be non-blocking, but we also need to wait for the reset process to complete before doing anything else with the heater
+//              if(resetHVACError(&heat_reset_in_progress) && (err_count < MAX_ERROR_RESET_RETRY)) {
+//                  err_count = 0; // If the reset succeeded, zero the error counter
+//              }
+//          else {
+//              hvac_state = HS_ERROR; // No further attempts will be made to reset the error. Manual intervention required!
+//          }
+//      }
         break;
 
-        case HS_OFF:
+        case HS_IN_RANGE:
             if ( hvac_temperature_ceiling < (hvac_desired_temperature - HEAT_TURN_ON_MARGIN) ) {
                 hvac_state = HS_HEAT;
                 digitalWrite(HVAC_REQ_HEAT, 1);
             }
+            // TODO: Make sure that heating and cooling overshoot don't activate the other mode
+            //else if ( hvac_temperature_ceiling >= (hvac_desired_temperature - HEAT_TURN_OFF_MARGIN) ) {
+            //    hvac_state = HS_COOL;
+            //    //digitalWrite(HVAC_REQ_COOL, 1); // TODO: Enable when hardware is added
+            //}
         break;
 
         case HS_HEAT:
+
+            // TODO: Start a one-shot timer to test whether the HEAT_ON signal from furnace has been activated within the maximum allowable time. If it hasn't, transition to error state.
+
             if ( hvac_temperature_ceiling > (hvac_desired_temperature + HEAT_TURN_OFF_MARGIN) ) {
-                hvac_state = HS_OFF;
+                hvac_state = HS_IN_RANGE;
                 digitalWrite(HVAC_REQ_HEAT, 0);
             }
         break;
+
+        //case HS_COOL:
+        //break;
 
     }
 

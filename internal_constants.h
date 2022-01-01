@@ -113,11 +113,13 @@
   #define ENCODER1_LED_PIN INDICATOR_LED /* Prefers PWM */
   #define RESERVED_OUTPUT_2 10 /* WARNING: The PWM on this pin did not give consistent 0-100% steps when driving ceiling lights */
 
-  #define HVAC_ERR_IN       3
-  #define HVAC_HEAT_ON_IN   4
-  #define HVAC_REQ_FAN      5
-  #define HVAC_REQ_HEAT     6
-  #define HVAC_REQ_COOL     7
+  #define HVAC_ERR_IN       4
+  #define HVAC_HEAT_ON_IN   5
+  #define HVAC_REQ_FAN      6
+  #define HVAC_REQ_HEAT     7
+//  #define HVAC_REQ_COOL     ?
+
+// DO NOT USE 3, 2, 1, 0 BECAUSE OF CONFLICT WITH I2C AND SERIAL //
 
 #else
   #error "CODE STUB"
