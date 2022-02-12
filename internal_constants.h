@@ -223,6 +223,10 @@ static const char topic_name_29[] PROGMEM = "og/temperature/floor";
 static const char topic_name_30[] PROGMEM = "og/temperature/ceiling";
 static const char topic_name_31[] PROGMEM = "og/hvac/desired_temperature";
 static const char topic_name_32[] PROGMEM = "og/hvac/state";
+static const char topic_name_33[] PROGMEM = "og/bm/0/watts";
+static const char topic_name_34[] PROGMEM = "og/solar/watts";
+static const char topic_name_35[] PROGMEM = "og/inverter/watts";
+static const char topic_name_36[] PROGMEM = "og/vehicle/watts";
 
 static const char topic_unit_NONE[] PROGMEM = "";
 static const char topic_unit_A[] PROGMEM = "A";
@@ -232,6 +236,7 @@ static const char topic_unit_Ah[] PROGMEM = "Ah";
 static const char topic_unit_PCT[] PROGMEM = "%";
 static const char topic_unit_min[] PROGMEM = "min";
 static const char topic_unit_DEGC[] PROGMEM = "°C";
+static const char topic_unit_W[] PROGMEM = "W";
 
 /* TODO: Might be nice to put all of this in PROGMEM, but seems like it might be more hassle than it's worth */
 static const Interface interface[] = {
@@ -239,10 +244,11 @@ static const Interface interface[] = {
 
   { MEMMAP_BANK0_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_02, topic_unit_V },
   { MEMMAP_BANK0_AMPS,                      2,  -1, AM_READ,      1,  topic_name_03, topic_unit_A },
+  { MEMMAP_BANK0_WATTS,                     2,  -1, AM_READ,      1,  topic_name_33, topic_unit_W },
   { MEMMAP_BANK0_AH_LEFT,                   2,  -1, AM_READWRITE, 0,  topic_name_04, topic_unit_Ah },
   { MEMMAP_BANK0_SOC,                       2,  -2, AM_READWRITE, 1,  topic_name_05, topic_unit_PCT },
   { MEMMAP_BANK0_TTG,                       2,  -1, AM_READ,      0,  topic_name_17, topic_unit_min },
-  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      0,  topic_name_26, topic_unit_NONE },
+  { MEMMAP_BANK0_CS,                        1,   0, AM_READ,      1,  topic_name_26, topic_unit_NONE },
 
   { MEMMAP_BANK0_AMPS_MULTIPLIER,           4,  -6, AM_READWRITE, 0,  topic_name_06, topic_unit_NONE },
   { MEMMAP_BANK0_VOLTS_MULTIPLIER,          4,  -6, AM_READWRITE, 0,  topic_name_07, topic_unit_NONE },
@@ -258,12 +264,15 @@ static const Interface interface[] = {
 
   { MEMMAP_SOLAR_VOLTS,                     2,  -2, AM_READ,      1,  topic_name_20, topic_unit_V },
   { MEMMAP_SOLAR_AMPS,                      2,  -1, AM_READ,      1,  topic_name_21, topic_unit_A },
+  { MEMMAP_SOLAR_WATTS,                     2,  -1, AM_READ,      1,  topic_name_34, topic_unit_W },
 
   { MEMMAP_VEHICLE_VOLTS,                   2,  -2, AM_READ,      1,  topic_name_22, topic_unit_V },
   { MEMMAP_VEHICLE_AMPS,                    2,  -1, AM_READ,      1,  topic_name_23, topic_unit_A },
+  { MEMMAP_VEHICLE_WATTS,                   2,  -1, AM_READ,      1,  topic_name_36, topic_unit_W },
 
   { MEMMAP_INVERTER_VOLTS,                  2,  -2, AM_READ,      0,  topic_name_24, topic_unit_V },
-  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      1,  topic_name_25, topic_unit_A },
+  { MEMMAP_INVERTER_AMPS,                   2,  -1, AM_READ,      0,  topic_name_25, topic_unit_A },
+  { MEMMAP_INVERTER_WATTS,                  2,  -1, AM_READ,      1,  topic_name_35, topic_unit_W },
 
   { MEMMAP_HVAC_ERROR,                      1,   0, AM_READ,      1,  topic_name_27, topic_unit_NONE },
   { MEMMAP_HVAC_HEAT_ON,                    1,   0, AM_READ,      1,  topic_name_28, topic_unit_NONE },

@@ -511,22 +511,28 @@ void processEnergyMonitors(void) {
 }
 
 void broadcastEnergyMonitors(void) {
+    // While it might seem like power (watts) is redundant, it has been added because linking together volts * amps after the fact for visualization hasn't been a simple task.
+
     // All values are decimal point shifted from float!
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_VOLTS, (int16_t)GetMemoryMap(MEMMAP_BANK0_VOLTS));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AMPS, (int16_t)GetMemoryMap(MEMMAP_BANK0_AMPS));
+    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_WATTS, (int16_t)GetMemoryMap(MEMMAP_BANK0_WATTS));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_AH_LEFT, (int16_t)GetMemoryMap(MEMMAP_BANK0_AH_LEFT));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_SOC, (int16_t)GetMemoryMap(MEMMAP_BANK0_SOC));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_BANK0_TTG, (int16_t)GetMemoryMap(MEMMAP_BANK0_TTG));
     serialize(MSG_RETURN_8_8,  "bb", (uint8_t)MEMMAP_BANK0_CS, (int8_t)GetMemoryMap(MEMMAP_BANK0_CS));
 
-    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_AMPS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_AMPS));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_VOLTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_VOLTS));
+    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_AMPS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_AMPS));
+    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_SOLAR_WATTS, (int16_t)GetMemoryMap(MEMMAP_SOLAR_WATTS));
 
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_VOLTS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_VOLTS));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_AMPS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_AMPS));
+    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_INVERTER_WATTS, (int16_t)GetMemoryMap(MEMMAP_INVERTER_WATTS));
 
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_VOLTS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_VOLTS));
     serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_AMPS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_AMPS));
+    serialize(MSG_RETURN_8_16, "bI", (uint8_t)MEMMAP_VEHICLE_WATTS, (int16_t)GetMemoryMap(MEMMAP_VEHICLE_WATTS));
 
 }
 
@@ -806,6 +812,8 @@ uint32_t GetMemoryMap(uint16_t address) {
         return battery_monitor_var[0].volts * 100;
     case MEMMAP_BANK0_AMPS:
         return battery_monitor_var[0].amps * 10;
+    case MEMMAP_BANK0_WATTS:
+        return battery_monitor_var[0].volts * battery_monitor_var[0].amps * 10;
     case MEMMAP_BANK0_AH_LEFT:
         return battery_monitor_var[0].amphours_remaining * 10;
     case MEMMAP_BANK0_SOC:
@@ -838,16 +846,22 @@ uint32_t GetMemoryMap(uint16_t address) {
         return solar_volts * 100;
     case MEMMAP_SOLAR_AMPS:
         return solar_amps * 10;
+    case MEMMAP_SOLAR_WATTS:
+        return solar_volts * solar_amps * 10;
 
     case MEMMAP_INVERTER_VOLTS:
         return inverter_volts * 100;
     case MEMMAP_INVERTER_AMPS:
         return inverter_amps * 10;
+    case MEMMAP_INVERTER_WATTS:
+        return (inverter_volts == 0 ? battery_monitor_var[0].volts : inverter_volts) * inverter_amps * 10; // Fallback to main battery if separate inverter voltage not available
 
     case MEMMAP_VEHICLE_VOLTS:
         return vehicle_volts * 100;
     case MEMMAP_VEHICLE_AMPS:
         return vehicle_amps * 10;
+    case MEMMAP_VEHICLE_WATTS:
+        return vehicle_volts * vehicle_amps * 10;
 
 
     case MEMMAP_HVAC_ERROR:
