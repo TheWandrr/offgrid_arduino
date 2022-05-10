@@ -56,6 +56,10 @@ enum PropexFurnaceErrorCode {
     PFEC_AIR
 };
 
+// System time keeping, millisecond precision, updated every 10 ms. Needs initialized at power on from RTC or sync pushed from external source.
+volatile bool system_clock_initialized = false;
+volatile uint64_t system_clock_ms = 0;
+
 // Variables related to status code LED and flashing
 volatile bool flash_led = false;
 volatile uint8_t flash_countdown;
@@ -139,6 +143,8 @@ void setup() {
     Timer1.start();
     //setupWatchdogTimer(); // Masks a problem where this stops responding on the CAN bus
 
+    //initSystemClock(); // Fetch time from RTC
+
     initHVAC();
     initEncoders();
     initEnergyMonitors();
@@ -172,13 +178,14 @@ void loop() {
             broadcastPWMValues();
             broadcastEnergyMonitors();
             broadcastHVAC();
-            //broadcastDebug(); /* DEBUG */
+            broadcastDebug(); /* DEBUG */
         }
     }
 
     if (ten_millisecond_flag) {
         ten_millisecond_flag = false;
 
+        system_clock_ms += 10;
         processEncoderLEDState();
         processHVACInputs();
     }
@@ -539,10 +546,15 @@ void broadcastEnergyMonitors(void) {
 void broadcastDebug(void) {
     char dbgstr[80];
 
-    for (int i = 0; i < sizeof(ina226_addr); i++) {
-        sprintf(dbgstr, "ina226[%d].readShuntVoltage() --> %d", i, ina226[i].readShuntCurrent());
-        serialize(MSG_DEBUG_STRING, "s", dbgstr); /* DEBUG */
-    }
+    //for (int i = 0; i < sizeof(ina226_addr); i++) {
+    //    sprintf(dbgstr, "ina226[%d].readShuntVoltage() --> %d", i, ina226[i].readShuntCurrent());
+    //    serialize(MSG_DEBUG_STRING, "s", dbgstr); /* DEBUG */
+    //}
+
+    //sprintf(dbgstr, "TIMESTAMP: %08lX %08lX", (uint32_t)(system_clock_ms >> 32), (uint32_t)(system_clock_ms));
+    //serialize(MSG_DEBUG_STRING, "s", dbgstr); /* DEBUG */
+    serialize(MSG_RETURN_8_32, "bl", (int32_t)MEMMAP_SYSTEM_CLOCK_H32, (int32_t)GetMemoryMap(MEMMAP_SYSTEM_CLOCK_H32));
+    serialize(MSG_RETURN_8_32, "bl", (int32_t)MEMMAP_SYSTEM_CLOCK_L32, (int32_t)GetMemoryMap(MEMMAP_SYSTEM_CLOCK_L32));
 }
 
 void broadcastHVAC(void) {
@@ -778,6 +790,14 @@ bool SetMemoryMap(uint16_t address, uint32_t data) {
 
         return true;
 
+    case MEMMAP_SYSTEM_CLOCK_H32:
+        system_clock_ms = (((uint64_t)(data)) << 32) | (system_clock_ms & 0x000000FFFFFF);
+        return true;
+
+    case MEMMAP_SYSTEM_CLOCK_L32:
+        system_clock_ms = (system_clock_ms & 0xFFFFFF00000000) | (uint64_t)(data);
+        return true;
+
     case MEMMAP_TEMPERATURE_FLOOR:
         //TODO: probably better not to constrain these as much or at all
         //hvac_temperature_floor = constrain(data * 0.1, -45.0, 50.0);
@@ -880,6 +900,11 @@ uint32_t GetMemoryMap(uint16_t address) {
     case MEMMAP_PWM_OUTPUT6:
     case MEMMAP_PWM_OUTPUT7:
         return GetPWM(address & 0x0007);
+
+    case MEMMAP_SYSTEM_CLOCK_H32:
+        return (uint32_t)(system_clock_ms >> 32);
+    case MEMMAP_SYSTEM_CLOCK_L32:
+        return (uint32_t)(system_clock_ms);
 
     case MEMMAP_TEMPERATURE_FLOOR:
         return hvac_temperature_floor * 10;

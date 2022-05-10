@@ -78,6 +78,9 @@ enum Memmap {
   MEMMAP_HVAC_DESIRED_TEMPERATURE,
   MEMMAP_HVAC_STATE,
 
+  MEMMAP_SYSTEM_CLOCK_H32,
+  MEMMAP_SYSTEM_CLOCK_L32,
+
   // The PWM outputs are bit addressed, so align at 0x_0 - Make sure this doesn't overlap previous enums!
   MEMMAP_PWM_OUTPUT0 = 0xA0,
   MEMMAP_PWM_OUTPUT1,

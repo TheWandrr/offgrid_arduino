@@ -227,6 +227,8 @@ static const char topic_name_33[] PROGMEM = "og/bm/0/watts";
 static const char topic_name_34[] PROGMEM = "og/solar/watts";
 static const char topic_name_35[] PROGMEM = "og/inverter/watts";
 static const char topic_name_36[] PROGMEM = "og/vehicle/watts";
+static const char topic_name_37[] PROGMEM = "og/system_clock_h";
+static const char topic_name_38[] PROGMEM = "og/system_clock_l";
 
 static const char topic_unit_NONE[] PROGMEM = "";
 static const char topic_unit_A[] PROGMEM = "A";
@@ -282,6 +284,9 @@ static const Interface interface[] = {
 
   { MEMMAP_HVAC_DESIRED_TEMPERATURE,        2,  -1, AM_READWRITE, 1,  topic_name_31, topic_unit_DEGC },
   { MEMMAP_HVAC_STATE,                      1,   0, AM_READ,      1,  topic_name_32, topic_unit_NONE },
+
+  { MEMMAP_SYSTEM_CLOCK_H32,                4,   0, AM_READWRITE, 0,  topic_name_37, topic_unit_NONE },
+  { MEMMAP_SYSTEM_CLOCK_L32,                4,   0, AM_READWRITE, 0,  topic_name_38, topic_unit_NONE },
 };
 
 #endif /* __INTERNAL_CONSTANTS_H */
