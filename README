@@ -17,6 +17,8 @@ Upload to board
 
     > ./upload.sh
 
+  *** Note that there may be additional packages to install. Let me know and I'll add them here to help others in the future.
+
 # Purpose
 
 The Arduino is connected via serial link to the Raspberry Pi. The functions of the Arduino are as follows:
