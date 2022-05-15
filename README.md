@@ -7,6 +7,8 @@ This project has been developed using a Raspberry Pi 3B+, "Raspberry Pi Meet Ard
 
 Code for the Raspberry Pi 3B+ board may be found here: https://github.com/TheWandrr/offgrid
 
+Code for programming the Arduino's EEPROM may be found here: https://github.com/TheWandrr/offgrid_init_eeprom
+
 # Building and Uploading
 
 Compile using arduino-cli (package must be installed before using these scripts)
